@@ -96,7 +96,7 @@ BBC kontenti ko'chirilmaydi: havola beriladi, transkriptni joylab AI orqali savo
 - **Real Cloudflare akkauntiga deploy qilinmagan** (menda akkaunt yo'q). Lokal `wrangler dev` (haqiqiy workerd, lokal D1/R2) da to'liq oqim o'tdi;
   birinchi deploy'dan keyin `scripts/smoke.mjs` ni ishga tushiring.
 - **Haqiqiy Gemini bilan sinalmagan** (kalit yo'q). So'rovlar rasmiy hujjatga mos yozilgan va soxta server bilan tekshirilgan. Model nomlari
-  `wrangler.jsonc` → `vars` da (`GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`), Google nomni o'zgartirsa shu yerda yangilang.
+  `wrangler.jsonc` → `vars` da (`GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`). Google eski modelni o'chirsa (404), ilova mavjud modellar ro'yxatidan eng yangisini o'zi tanlaydi; baribir nomni shu yerda yangilab qo'ying.
 - Tezlik cheklovi (`rateLimit`) har Worker nusxasida alohida (xotirada) — qat'iy global limit emas.
 - CEFR/IELTS baholari taxminiy; IELTS natijasini kafolatlamaydi. «Erishish ehtimoli» konservativ ichki model (~200 soat/daraja, eslab qolish ~60%).
 - Dastlabki kontent: 26 grammatika darsi (A1–C1), 8 mavzu × 40 so'z, 125 kundalik so'z. Oylab har kuni yangi so'zlar uchun Gemini kaliti kerak.

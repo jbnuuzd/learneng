@@ -7,7 +7,7 @@ export class AiError extends Error {
 export const aiEnabled = () => !!cfg.apiKey;
 
 // Last Gemini outcome in this Worker instance, shown in the teacher's "AI connection" check.
-export const aiState = { lastError: null, lastOkAt: null };
+export const aiState = { lastError: null, lastOkAt: null, models: {} };   // models: auto-selected replacements when a configured model is retired
 // Short, key-free description of a failure for UI messages and logs.
 export function aiErrorText(e) {
   const m = String(e?.message || e || 'noma\'lum xato').replace(/AIza[0-9A-Za-z_-]{20,}/g, '[kalit]').replace(/\s+/g, ' ');
@@ -15,10 +15,25 @@ export function aiErrorText(e) {
 }
 const note = (e) => { aiState.lastError = { at: new Date().toISOString(), message: aiErrorText(e) }; console.error('[gemini]', aiState.lastError.message); return e; };
 
-async function call(model, body, timeoutMs) {
+// Google retires model names regularly. When the configured one is gone (404), ask the API which models exist and pick the newest suitable one.
+async function listModels() {
+  const r = await fetch(`${cfg.baseUrl}/models?pageSize=200`, { headers: { 'x-goog-api-key': cfg.apiKey }, signal: AbortSignal.timeout(15000) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new AiError('failed', `models.list → ${r.status}: ${d?.error?.message || 'xato'}`);
+  return (d.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => m.name.replace(/^models\//, ''));
+}
+const verOf = (n) => Number(/gemini-(\d+(?:\.\d+)?)/.exec(n)?.[1] || 0);
+export function pickModel(kind, names) {
+  const ok = (n) => (kind === 'tts' ? /tts/.test(n) : /gemini-[\d.]+-flash/.test(n) && !/tts|image|live|audio|native|embed|exp|thinking|robotics/.test(n));
+  return names.filter(ok).sort((a, b) => verOf(b) - verOf(a) || (/preview/.test(a) ? 1 : 0) - (/preview/.test(b) ? 1 : 0) || (/lite/.test(a) ? 1 : 0) - (/lite/.test(b) ? 1 : 0))[0] || null;
+}
+const configured = (kind) => (kind === 'tts' ? cfg.ttsModel : cfg.textModel);
+const effective = (kind) => aiState.models[kind] || configured(kind);
+
+async function call(kind, body, timeoutMs) {
   if (!cfg.apiKey) throw new AiError('no_key', 'GEMINI_API_KEY sozlanmagan');
-  let lastErr;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let model = effective(kind), lastErr, switched = false;
+  for (let attempt = 0; attempt < 4; attempt++) {
     let r;
     try {
       r = await fetch(`${cfg.baseUrl}/models/${model}:generateContent`, {
@@ -33,10 +48,19 @@ async function call(model, body, timeoutMs) {
     }
     const data = await r.json().catch(() => ({}));
     if (r.ok) { aiState.lastError = null; aiState.lastOkAt = new Date().toISOString(); return data; }
-    const detail = `${model} → ${r.status}${data?.error?.status ? ' ' + data.error.status : ''}: ${data?.error?.message || 'xato'}`;
-    lastErr = new AiError(r.status === 429 || r.status >= 500 ? 'retry' : 'failed', detail);
-    if (r.status !== 429 && r.status < 500) throw note(lastErr);   // 400/401/403/404 will not get better by retrying
-    await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+    const msg = data?.error?.message || 'xato';
+    const detail = `${model} → ${r.status}${data?.error?.status ? ' ' + data.error.status : ''}: ${msg}`;
+    lastErr = new AiError('failed', detail);
+    if (r.status === 404 && !switched) {                          // model retired: switch to the newest available one
+      switched = true;
+      try {
+        const alt = pickModel(kind, await listModels());
+        if (alt && alt !== model) { console.error(`[gemini] ${model} is unavailable, switching to ${alt}`); aiState.models[kind] = alt; model = alt; continue; }
+      } catch (e) { lastErr = new AiError('failed', `${detail} (model ro'yxatini olib bo'lmadi: ${aiErrorText(e)})`); }
+    }
+    const transient = r.status === 429 || r.status >= 500 || /Model tried to generate text/i.test(msg);   // the TTS model sometimes answers with text; a retry usually fixes it
+    if (!transient) throw note(lastErr);
+    await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
   }
   throw note(lastErr);
 }
@@ -71,13 +95,13 @@ export async function generateJSON(prompt, { system = '', audio = null, grounded
   // Gemini cannot combine JSON mode with the search tool, so grounded calls parse JSON from plain text.
   if (grounded) body.tools = [{ google_search: {} }];
   else body.generationConfig.responseMimeType = 'application/json';
-  return parseJsonLoose(textOf(await call(cfg.textModel, body, grounded ? 90000 : timeout)));
+  return parseJsonLoose(textOf(await call('text', body, grounded ? 90000 : timeout)));
 }
 
 export async function generateText(prompt, { system = '', temperature = 0.7, history = [], timeout = 60000 } = {}) {
   const contents = [...history, { role: 'user', parts: [{ text: prompt }] }];
   const body = { systemInstruction: { parts: [{ text: (system ? system + '\n' : '') + GUARD }] }, contents, generationConfig: { temperature } };
-  return textOf(await call(cfg.textModel, body, timeout)).trim();
+  return textOf(await call('text', body, timeout)).trim();
 }
 
 // ---- Text to speech -------------------------------------------------------
@@ -96,11 +120,11 @@ export function pcmToWav(pcm, rate = 24000, channels = 1) {
 const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 async function synthesize(text, { voice = 'Kore', speakers = null, style = '' } = {}) {
-  const prompt = (style ? style + ': ' : '') + text;
+  const prompt = /^TTS the following conversation/.test(text) ? text : `${style || 'Say clearly'}: ${text}`;   // a leading instruction keeps the TTS model from treating short text as a prompt
   const speechConfig = speakers && speakers.length === 2
     ? { multiSpeakerVoiceConfig: { speakerVoiceConfigs: speakers.map((s) => ({ speaker: s.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: s.voice } } })) } }
     : { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } };
-  const data = await call(cfg.ttsModel, {
+  const data = await call('tts', {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { responseModalities: ['AUDIO'], speechConfig },
   }, 90000);
@@ -184,5 +208,5 @@ export async function runAiChecks() {
   else if (/API key|API_KEY_INVALID|PERMISSION_DENIED|401|403/i.test(errs)) hint = "API kalit noto'g'ri yoki ruxsati yo'q. AI Studio'da yangi kalit yarating va Secret'ni yangilang.";
   else if (/429|RESOURCE_EXHAUSTED|quota/i.test(errs)) hint = "Bepul kvota (daqiqa/kun limiti) tugagan. Biroz kuting yoki AI Studio'da hisob-kitobni yoqing.";
   else if (/404|not found|NOT_FOUND/i.test(errs)) hint = "Model nomi topilmadi. wrangler.jsonc dagi GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL ni yangilang.";
-  return { key: aiEnabled(), textModel: cfg.textModel, ttsModel: cfg.ttsModel, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
+  return { key: aiEnabled(), textModel: effective('text'), ttsModel: effective('tts'), configured: { text: cfg.textModel, tts: cfg.ttsModel }, autoSwitched: { ...aiState.models }, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
 }

@@ -17,7 +17,7 @@
   //   "r2_buckets": [{ "binding": "FILES", "bucket_name": "learneng-files" }],
   // Without it, uploads (max 8 MB) are stored in D1 and TTS audio in the Workers cache.
   "vars": {
-    "GEMINI_TEXT_MODEL": "gemini-2.5-flash",
+    "GEMINI_TEXT_MODEL": "gemini-3.8-flash",
     "GEMINI_TTS_MODEL": "gemini-2.5-flash-preview-tts"
   },
   "observability": { "enabled": true }

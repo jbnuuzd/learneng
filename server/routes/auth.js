@@ -88,7 +88,7 @@ export function registerAuth(r) {
     return { ok: true };
   });
 
-  r.get('/api/ai/status', async () => ({ enabled: aiEnabled(), textModel: cfg.textModel, ttsModel: cfg.ttsModel, lastError: aiState.lastError, lastOkAt: aiState.lastOkAt }));
+  r.get('/api/ai/status', async () => ({ enabled: aiEnabled(), textModel: aiState.models.text || cfg.textModel, ttsModel: aiState.models.tts || cfg.ttsModel, lastError: aiState.lastError, lastOkAt: aiState.lastOkAt }));
   r.post('/api/ai/test', async ({ user }) => {
     if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
     rateLimit(user.id, 'aitest', 6);
