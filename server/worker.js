@@ -31,7 +31,7 @@ const errorResponse = (status, body) => {
   return new Response(JSON.stringify(body), { status, headers: h });
 };
 
-async function handle(request, env) {
+async function handle(request, env, execCtx) {
   const url = new URL(request.url);
   const m = router.match(request.method, url.pathname);
   if (!m) throw new HttpError(request.method === 'GET' ? 404 : 405, 'Topilmadi');
@@ -54,6 +54,7 @@ async function handle(request, env) {
     query: Object.fromEntries(url.searchParams),
     date: clientDate(request.headers.get('x-local-date')),
     body: unsafe && !route.opts.raw ? await readJson(request, route.opts.limit) : {},
+    waitUntil: (p) => { try { execCtx?.waitUntil?.(p); } catch { /* tests */ } },
     setCookie: (v) => resHeaders.append('set-cookie', url.protocol === 'https:' ? v : v.replace('; Secure', '')),
   };
   const out = await route.handler(ctx);
@@ -62,12 +63,12 @@ async function handle(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, execCtx) {
     setEnv(env);
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
     try {
-      return await handle(request, env);
+      return await handle(request, env, execCtx);
     } catch (e) {
       const status = e instanceof HttpError ? e.status : 500;
       if (status === 500) console.error(e && e.stack ? e.stack : e);

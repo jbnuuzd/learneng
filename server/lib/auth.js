@@ -35,10 +35,11 @@ export async function createSession(userId) {
 }
 export async function userFromToken(token) {
   if (!token) return null;
-  const s = await q.get('SELECT user_id, expires_at FROM sessions WHERE token=?', token);
-  if (!s) return null;
-  if (s.expires_at < Date.now()) { await q.run('DELETE FROM sessions WHERE token=?', token); return null; }
-  return (await q.get('SELECT id,email,name,role,teacher_id,invite_code,feedback_tone,created_at FROM users WHERE id=?', s.user_id)) ?? null;
+  const row = await q.get('SELECT u.id,u.email,u.name,u.role,u.teacher_id,u.invite_code,u.feedback_tone,u.created_at, s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?', token);
+  if (!row) return null;
+  if (row.expires_at < Date.now()) { await q.run('DELETE FROM sessions WHERE token=?', token); return null; }
+  const { expires_at, ...user } = row;
+  return user;
 }
 export const sessionCookie = (token, maxAge = 30 * 86400, secure = true) =>
   `sid=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;

@@ -69,8 +69,8 @@ export const listeningTrainerView = () => textTrainer('listening');
 // ------------------------------------------------------------------------- speaking
 export async function speakingTrainerView({ args }) {
   if (args[0]) return sessionPage(Number(args[0]));
-  const cfg = await api.get('/api/trainers/config');
-  const units = await api.get('/api/speaking/options/units').catch(() => []);
+  const cfg = await api.get('/api/speaking/setup');
+  const units = cfg.units;
   let persona = 'emma';
   const grid = h('div', { class: 'grid g4' });
   const drawP = () => grid.replaceChildren(...cfg.personas.map((p) => h('button', { type: 'button', class: 'persona' + (p.id === persona ? ' on' : ''), onclick: () => { persona = p.id; drawP(); } }, h('div', { class: 'em' }, p.emoji), h('b', {}, p.name), h('small', { class: 'muted' }, p.title), h('small', { class: 'muted' }, p.desc))));
@@ -82,7 +82,7 @@ export async function speakingTrainerView({ args }) {
   const unitField = field("O'zlashtirgan grammatika mavzusi (\"Grammatika bo'yicha\" rejimi uchun)", unitSel);
   unitField.style.display = 'none'; mode.onchange = () => { unitField.style.display = mode.value === 'grammar' ? '' : 'none'; };
   const hist = h('div', { class: 'card' });
-  api.get('/api/speaking').then((rows) => mount(hist, h('h2', {}, 'Oldingi suhbatlar'), rows.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['Ustoz', 'Daraja', 'Rejim', 'Natija', 'Sana'].map((t) => h('th', {}, t)))), h('tbody', {}, rows.map((r) => h('tr', { style: { cursor: 'pointer' }, onclick: () => go('#/trainer/speaking/' + r.id) }, h('td', {}, `${r.emoji} ${r.persona}`), h('td', {}, r.level), h('td', {}, r.mode), h('td', {}, r.cefr ? `${r.cefr} · ${r.band}` : r.status === 'done' ? '—' : 'yakunlanmagan'), h('td', { class: 'muted' }, r.created.slice(0, 10)))))) : h('p', { class: 'muted' }, 'Hali suhbat bo\'lmagan.')));
+  (((rows) => mount(hist, h('h2', {}, 'Oldingi suhbatlar'), rows.length ? h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['Ustoz', 'Daraja', 'Rejim', 'Natija', 'Sana'].map((t) => h('th', {}, t)))), h('tbody', {}, rows.map((r) => h('tr', { style: { cursor: 'pointer' }, onclick: () => go('#/trainer/speaking/' + r.id) }, h('td', {}, `${r.emoji} ${r.persona}`), h('td', {}, r.level), h('td', {}, r.mode), h('td', {}, r.cefr ? `${r.cefr} · ${r.band}` : r.status === 'done' ? '—' : 'yakunlanmagan'), h('td', { class: 'muted' }, r.created.slice(0, 10)))))) : h('p', { class: 'muted' }, 'Hali suhbat bo\'lmagan.')))(cfg.history));
   return h('div', {}, header('🎤', 'Speaking trenajyor', 'AI suhbatdosh bilan jonli gaplashing. Oxirida xato, yutuq va tavsiyalar beriladi.', cfg),
     h('div', { class: 'card' }, h('h2', {}, '1. Ustozni tanlang'), grid),
     h('div', { class: 'card' }, h('h2', {}, '2. Sozlamalar'), h('div', { class: 'grid g2' }, field('Qiyinlik darajasi', level, "«Avto» — o'zlashtirgan darajangizda suhbat"), field('Rejim', mode)), unitField, field('Mavzu', topic),
@@ -125,7 +125,7 @@ async function sessionPage(id) {
 
   if (s.status === 'done') { controls.append(reportView(s.report)); }
   else {
-    const rec = recorderWidget({ seconds: 90 });
+    const rec = recorderWidget({ seconds: s.mode === 'ielts2' ? 120 : 45 });
     const txt = h('input', { type: 'text', placeholder: 'Yoki shu yerga yozing…', 'aria-label': 'Matnli javob' });
     const sendAudio = h('button', { class: 'btn', onclick: async () => { const d = rec.get(); if (!d) return toast('Avval gapirib yozib oling', true); await send({ wav: d.base64 }); rec.el.querySelector('audio')?.remove(); } }, 'Yuborish');
     const sendText = h('button', { class: 'btn secondary', onclick: async () => { if (!txt.value.trim()) return; const v = txt.value; txt.value = ''; await send({ text: v }); } }, 'Matn yuborish');

@@ -10,16 +10,21 @@ import { activePlan } from '../planner.js';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function meState(user, date) {
-  const diag = await q.get('SELECT status FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1', user.id);
   const isStudent = user.role === 'student';
-  const goal = isStudent ? await q.get('SELECT user_id FROM goals WHERE user_id=?', user.id) : null;
-  const teacher = user.teacher_id ? await q.get('SELECT id,name,email FROM users WHERE id=?', user.teacher_id) : null;
+  const [diag, goal, teacher, tone, plan, level] = await Promise.all([
+    q.get('SELECT status FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1', user.id),
+    isStudent ? q.get('SELECT user_id FROM goals WHERE user_id=?', user.id) : null,
+    user.teacher_id ? q.get('SELECT id,name,email FROM users WHERE id=?', user.teacher_id) : null,
+    isStudent ? effectiveTone(user.id, date) : null,
+    isStudent ? activePlan(user.id) : null,
+    isStudent ? currentLevel(user.id) : null,
+  ]);
   return {
     user: { id: user.id, name: user.name, email: user.email, role: user.role, inviteCode: user.invite_code || undefined, feedbackTone: user.feedback_tone, teacher: teacher ?? null },
-    today: { tone: isStudent ? await effectiveTone(user.id, date) : null, date },
+    today: { tone, date },
     tones: TONES,
     ai: aiEnabled(),
-    state: isStudent ? { diagnostic: diag?.status || 'none', hasGoal: !!goal, hasPlan: !!(await activePlan(user.id)), level: await currentLevel(user.id) } : null,
+    state: isStudent ? { diagnostic: diag?.status || 'none', hasGoal: !!goal, hasPlan: !!plan, level } : null,
   };
 }
 

@@ -148,10 +148,18 @@ test('speaking partner: persona + level reach the model, per-turn notes, final r
   const sys = start.body.systemInstruction.parts[0].text;
   assert.match(sys, /Mr\. Victor/); assert.match(sys, /CEFR B1/); assert.match(sys, /OPPOSITE side/); assert.match(sys, /never insult/i);
   const id = r.data.id;
+  const synth = () => seen.filter((s) => s.body.generationConfig?.responseModalities).length;
+  const n0 = synth();
   r = await student.post(`/api/speaking/${id}/turn`, { wav: Buffer.from('RIFFxxxxWAVE').toString('base64') });
   assert.equal(r.data.transcript, 'I like football.'); assert.equal(r.data.notes.length, 1); assert.ok(r.data.audio);
   const turn = seen.filter((s) => s.body.contents[0].parts[0].text.includes('Conversation so far')).at(-1);
   assert.equal(turn.body.contents[0].parts[1].inlineData.mimeType, 'audio/wav');
+  assert.equal(turn.body.generationConfig.thinkingConfig.thinkingBudget, 0, 'speaking turns skip slow "thinking"');
+  const [a, b] = await Promise.all([student.get('/api/tts/' + r.data.audio), student.get('/api/tts/' + r.data.audio)]);
+  assert.equal(a.status, 200); assert.equal(b.status, 200);
+  assert.equal(synth() - n0, 1, 'prewarm + concurrent requests share ONE synthesis');
+  const setup = (await student.get('/api/speaking/setup')).data;
+  assert.ok(setup.personas.length === 10 && Array.isArray(setup.history) && setup.level && setup.modes);
   r = await student.post(`/api/speaking/${id}/finish`);
   assert.equal(r.data.report.ai, true); assert.equal(r.data.report.cefr, 'B1'); assert.equal(r.data.report.tone, 'positive');
   assert.ok(r.data.report.vocabularySuggestions.length === 1);

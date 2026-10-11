@@ -65,7 +65,8 @@ async function render() {
   if (!role) { go(state.me.user.role === 'teacher' ? '#/t' : '#/'); return; }
   if (role !== state.me.user.role) { go(state.me.user.role === 'teacher' ? '#/t' : '#/'); return; }
   if (role === S) { // onboarding guard
-    await refreshMe();
+    const pending = state.me.state.diagnostic !== 'done' || !state.me.state.hasGoal;
+    if (pending) await refreshMe();          // once onboarding is done there is no need to re-fetch the profile on every page change
     const st = state.me.state;
     if (st.diagnostic !== 'done' && path !== '/diagnostic' && path !== '/profile') { go('#/diagnostic'); return; }
     if (st.diagnostic === 'done' && !st.hasGoal && !['/goal', '/diagnostic', '/profile'].includes(path)) { go('#/goal'); return; }
