@@ -45,6 +45,13 @@ Kalitni https://aistudio.google.com/apikey dan oling. Secret qo'shgach qayta dep
 
 Lug'at bazasini to'ldirish: o'qituvchi sifatida kiring → **Materiallar va lug'at** → har bir mavzu yonidagi «+40 so'z» (Gemini yaratadi va D1 da saqlaydi).
 
+### GitHub (Workers Builds) orqali deploy qilsangiz
+1. Cloudflare → **Storage & Databases → D1 → learneng** sahifasidan **Database ID** ni nusxalang va GitHub'da `wrangler.jsonc` ichidagi
+   `REPLACE_WITH_YOUR_D1_DATABASE_ID` o'rniga qo'ying (xato: `binding DB of type d1 must have a valid database_id` shu sababli chiqadi).
+2. Worker → **Settings → Build → Deploy command** ni `npm run deploy:ci` qiling: u har deploy'da jadvallarni D1 da yaratadi/yangilaydi (`migrations/`) va keyin deploy qiladi.
+3. Worker → **Settings → Variables and Secrets** da `GEMINI_API_KEY` va `TEACHER_SIGNUP_CODE` ni **Secret** sifatida qo'shing.
+(`npm warn allow-scripts` ogohlantirishi xato emas, e'tibor bermang.)
+
 ### Domen
 Dashboard → Workers & Pages → `learneng` → Settings → Domains & Routes → *Add custom domain* (domeningiz Cloudflare'da bo'lishi kerak).
 
