@@ -54,6 +54,12 @@ r = await student.get('/api/tts/' + audio);
 ok(r.status === 200, `TTS endpoint (${r.headers.get('content-type')?.split(';')[0]})`);
 r = await student.post(`/api/tasks/${vocab.id}/stage/flash-topic`, {});
 ok(r.status === 200, 'flashcard stage saved');
+await student.post(`/api/tasks/${vocab.id}/stage/flash-general`, {});
+const quiz = les.stages.find((x) => x.key === 'vquiz');
+r = await student.post(`/api/tasks/${vocab.id}/stage/vquiz`, { answers: quiz.items.map(() => 0) });
+ok(r.status === 200 && r.data.items.length === quiz.items.length, 'vocabulary quiz graded + spaced-repetition state updated (D1 UPDATE…FROM)');
+r = await student.get('/api/progress');
+ok(r.data.srs?.total >= 50, `SRS tracks ${r.data.srs?.total} learned words`);
 const grammar = day.tasks.find((t) => t.type === 'grammar');
 if (grammar) { const g = (await student.get('/api/tasks/' + grammar.id)).data; r = await student.post(`/api/tasks/${grammar.id}/stage/theory`, {}); ok(r.status === 200, `grammar lesson "${grammar.title}" (${g.stages.length} stages)`); }
 
@@ -64,6 +70,12 @@ ok(r.status === 200, 'speaking partner session');
 r = await student.get('/api/analysis');
 ok(r.status === 200 && r.data.ready, `analysis: ${r.data.verdict}, chance ${r.data.chance}%`);
 
+r = await student.post('/api/mock/start', { kind: 'mini' });
+ok(r.status === 200 && r.data.id, 'IELTS mock exam created');
+r = await student.post(`/api/mock/${r.data.id}/section/reading/start`);
+ok(r.status === 200 && r.data.passages?.length === 2 && r.data.remainingSeconds > 0, 'mock reading section started with timer');
+r = await teacher.get('/api/teacher/export.csv');
+ok(r.status === 200 && r.headers.get('content-type')?.includes('text/csv'), 'teacher CSV export');
 const file = new TextEncoder().encode('%PDF-1.4 smoke');
 r = await teacher.req('POST', `/api/teacher/materials?title=Smoke`, file, { 'x-filename': 'smoke.pdf', 'content-type': 'application/octet-stream', 'x-requested-with': 'smoke' });
 ok(r.status === 200, `material upload to R2 (${r.status})`);
