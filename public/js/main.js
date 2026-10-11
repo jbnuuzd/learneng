@@ -31,6 +31,17 @@ const NAV_S = [
 ];
 const NAV_T = [['/t', '👥', "O'quvchilar"], ['/t/materials', '📚', 'Materiallar va lug\'at'], ['/t/profile', '👤', 'Profil']];
 
+// ---- theme: auto (system) / light / dark, remembered per browser
+const THEMES = [['auto', '🌓 Avto'], ['light', '☀️ Yorug\''], ['dark', '🌙 Tungi']];
+const getTheme = () => { try { return localStorage.getItem('theme') || 'auto'; } catch { return 'auto'; } };
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('theme', t); } catch { /* private mode */ }
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches) ? '#0e1120' : '#4f46e5');
+}
+applyTheme(getTheme());
+const TAB_S = [['/', '🏠', 'Bosh'], ['/trajectory', '🗓️', 'Dars'], ['/trainer/speaking', '🎤', 'Trenajyor'], ['/progress', '📈', 'Progress'], ['/profile', '👤', 'Profil']];
+
 const root = document.getElementById('app');
 let view = null;
 
@@ -40,12 +51,17 @@ function shell(content) {
   const side = h('aside', { class: 'sidebar', id: 'side' },
     h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'L'), 'LearnEng'),
     h('nav', { class: 'nav' }, nav.map((n) => n[0] === 'sep' ? h('div', { class: 'sep' }, n[1]) :
-      h('a', { href: '#' + n[0], class: (n[0] === '/' || n[0] === '/t' ? (cur === n[0] || (n[0] === '/t' && cur.startsWith('/t/student'))) : cur.startsWith(n[0])) ? 'active' : '', onclick: () => $('#side').classList.remove('open') }, n[1], ' ', n[2]))),
+      h('a', { href: '#' + n[0], class: (n[0] === '/' || n[0] === '/t' ? (cur === n[0] || (n[0] === '/t' && cur.startsWith('/t/student'))) : cur.startsWith(n[0])) ? 'active' : '', onclick: () => { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); } }, n[1], ' ', n[2]))),
     h('div', { class: 'me' }, h('b', {}, state.me.user.name), h('div', { class: 'muted' }, state.me.user.role === 'teacher' ? "O'qituvchi" : "O'quvchi"),
       !state.me.ai && h('div', { class: 'badge warn', style: { marginTop: '8px' }, title: ".env faylida GEMINI_API_KEY ni kiriting" }, "AI ulanmagan"),
-      h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn secondary sm', onclick: logout }, 'Chiqish'))));
-  return h('div', { class: 'layout' }, side,
-    h('div', {}, h('div', { class: 'topbar' }, h('button', { class: 'btn secondary sm', onclick: () => $('#side').classList.toggle('open'), 'aria-label': 'Menyu' }, '☰'), h('b', {}, 'LearnEng')),
+      h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn secondary sm theme-btn', title: 'Mavzu', onclick: (e) => { const t = THEMES[(THEMES.findIndex(([k]) => k === getTheme()) + 1) % THEMES.length]; applyTheme(t[0]); e.target.textContent = t[1]; } }, THEMES.find(([k]) => k === getTheme())[1])),
+      h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn secondary sm', onclick: logout }, 'Chiqish'))));
+  const isT = state.me.user.role === 'teacher';
+  const tabs = (isT ? NAV_T : TAB_S).filter((n) => n[0] !== 'sep');
+  const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Asosiy menyu' }, tabs.map((n) => h('a', { href: '#' + n[0], class: (n[0] === '/' || n[0] === '/t' ? (cur === n[0] || (n[0] === '/t' && cur.startsWith('/t/student'))) : cur.startsWith(n[0] === '/trainer/speaking' ? '/trainer' : n[0])) ? 'active' : '' }, h('span', {}, n[1]), (n[2].split(' ')[0]).slice(0, 10))));
+  const scrim = h('div', { class: 'scrim', id: 'scrim', onclick: () => { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); } });
+  return h('div', { class: 'layout' }, side, scrim, tabbar,
+    h('div', {}, h('div', { class: 'topbar' }, h('button', { class: 'btn secondary sm', onclick: () => { $('#side').classList.toggle('open'); $('#scrim').classList.toggle('show'); }, 'aria-label': 'Menyu' }, '☰'), h('b', {}, 'LearnEng')),
       h('main', { class: 'main', id: 'view' }, content)));
 }
 

@@ -19,8 +19,10 @@ export async function homeView() {
   const daysLeft = goal ? Math.max(0, Math.round((Date.parse(goal.deadline) - Date.parse(today)) / 864e5)) : null;
   const st = prog.stats;
   return h('div', {},
-    h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'muted' }, fmtDate(today, true)), h('h1', {}, `Salom, ${me.user.name.split(' ')[0]}! 👋`)),
-      h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Bugungi fikr-mulohaza turi:'), toneBadge(me.today.tone))),
+    h('div', { class: 'hero' }, h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'muted' }, fmtDate(today, true)), h('h1', {}, `Salom, ${me.user.name.split(' ')[0]}! 👋`),
+      h('div', {}, daysLeft != null && h('small', {}, `Maqsad: ${goal.target_cefr} · IELTS ${goal.target_ielts} · ${daysLeft} kun qoldi`))),
+      h('div', { class: 'row' }, h('small', {}, 'Fikr-mulohaza:'), toneBadge(me.today.tone))),
+      day && h('div', { class: 'progress' }, h('div', { class: 'row between' }, h('small', {}, "Bugungi reja"), h('small', {}, `${fmtMin(day.doneMinutes)} / ${fmtMin(day.totalMinutes)} · ${Math.round(day.percent)}%`)), bar(day.percent / 100))),
     msgs.length ? h('div', { class: 'card flat' }, h('b', {}, `💬 O'qituvchidan xabar${msgs.length > 1 ? 'lar' : ''}`), msgs.map((m) => h('div', { class: 'q' }, h('div', { class: 'fb' }, m.text), h('small', { class: 'muted' }, `${m.teacher} · ${m.created_at.slice(0, 16)}`))),
       h('button', { class: 'btn secondary sm', onclick: async (e) => { e.target.disabled = true; await api.post('/api/messages/read'); e.target.closest('.card').remove(); } }, "O'qidim")) : null,
     st.missed >= 3 && h('div', { class: 'alert warn' }, h('div', { class: 'row between' }, h('span', {}, `Siz ${st.missed} ta topshiriqni o'tkazib yubordingiz. Rejani bugundan qayta tuzamizmi?`),
