@@ -18,6 +18,8 @@ const PED_HINTS = [
   "Ilmiy rahbar fikri va kafedra (laboratoriya) yig'ilishi xulosasi",
 ];
 
+const ECON_HINTS = "Statistika qo'mitasi/vazirlik ma'lumotlari manbalari ma'lumotnomasi|Takliflarni joriy etish dalolatnomasi (korxona, vazirlik, hokimlik) — 2027-yildan majburiy emas, lekin natija ahamiyatini asoslaydi|Ekonometrik model hisob-kitoblari ilovasi|Asosiy ilmiy maqolalar yakka mualliflikda bo'lishi shart (ijtimoiy-gumanitar soha)";
+
 const directions = [
   T('13.00.01', "Pedagogika nazariyasi va tarixi. Ta'lim falsafasi", 'Pedagogika', 'education,pedagogy,highered', PED_HINTS.join('|')),
   T('13.00.02', "Ta'lim va tarbiya nazariyasi va metodikasi (fanlar bo'yicha)", 'Pedagogika', 'education,pedagogy,edtech', PED_HINTS.join('|')),
@@ -26,7 +28,19 @@ const directions = [
   T('13.00.08', "Uzluksiz ta'lim, raqamli ta'lim va ta'lim texnologiyalari", 'Pedagogika', 'education,edtech,highered', PED_HINTS.join('|')),
   T('05.13.00', "Informatika, hisoblash texnikasi va boshqaruv", 'Texnika / IT', 'cs,engineering', "Dasturiy mahsulotga DGU (Intellektual mulk agentligi) guvohnomasi|Dasturni amaliyotga joriy etish dalolatnomasi|Dastur kodi va sinov natijalari ilovasi"),
   T('05.01.00', "Muhandislik, texnologiya va materialshunoslik", 'Texnika / IT', 'engineering,energy,materials', "Foydali modelga/ixtiroga patent|Sinov laboratoriyasi bayonnomasi|Ishlab chiqarishga joriy etish dalolatnomasi va iqtisodiy samara hisobi"),
-  T('08.00.00', "Iqtisodiyot, moliya va menejment", 'Iqtisodiyot', 'economics,management,finance', "Statistika qo'mitasi/vazirlik ma'lumotlari manbalari ma'lumotnomasi|Takliflarni joriy etish dalolatnomasi (korxona, vazirlik, hokimlik)|Ekonometrik model hisob-kitoblari ilovasi"),
+  ...[
+    ['08.00.01', 'Iqtisodiyot nazariyasi', 'economics'], ['08.00.02', 'Makroiqtisodiyot', 'economics,finance'], ['08.00.03', 'Sanoat iqtisodiyoti', 'economics,management'],
+    ['08.00.04', "Qishloq xo'jaligi iqtisodiyoti", 'economics,agri'], ['08.00.05', "Xizmat ko'rsatish tarmoqlari iqtisodiyoti", 'economics,management,tourism'], ['08.00.06', 'Ekonometrika va statistika', 'economics,finance'],
+    ['08.00.07', 'Moliya, pul muomalasi va kredit', 'finance,economics'], ['08.00.08', 'Buxgalteriya hisobi, iqtisodiy tahlil va audit', 'finance,economics,management'], ['08.00.09', 'Jahon iqtisodiyoti', 'economics,finance'],
+    ['08.00.10', 'Demografiya. Mehnat iqtisodiyoti', 'economics,social'], ['08.00.11', 'Marketing', 'management,economics,tourism'], ['08.00.12', 'Mintaqaviy iqtisodiyot', 'economics,tourism'],
+    ['08.00.13', 'Menejment', 'management,economics'], ['08.00.14', 'Iqtisodiyotda axborot tizimlari va texnologiyalari', 'economics,cs,management'], ['08.00.15', 'Tadbirkorlik va kichik biznes iqtisodiyoti', 'economics,management'],
+    ['08.00.16', 'Raqamli iqtisodiyot va xalqaro raqamli integratsiya', 'economics,cs,management'], ['08.00.17', 'Turizm va mehmonxona faoliyati', 'tourism,economics,management'], ['08.00.18', "Kambag'allik va taraqqiyot", 'economics,social'],
+    ['08.00.19', "Davlat boshqaruvining iqtisodiy asoslari", 'economics,management,social'],
+  ].map(([c, n, tags]) => T(c, n, 'Iqtisodiyot', tags, ECON_HINTS)),
+  ...[
+    ['11.00.01', 'Tabiiy geografiya', 'geography,natural'], ['11.00.02', 'Iqtisodiy va ijtimoiy geografiya', 'geography,economics,tourism'], ['11.00.03', 'Quruqlik gidrologiyasi', 'geography,natural'],
+    ['11.00.04', 'Meteorologiya', 'geography,natural'], ['11.00.05', 'Atrof-muhitni muhofaza qilish', 'geography,natural'], ['11.00.06', 'Geodeziya. Kartografiya', 'geography,engineering'], ['11.00.07', 'Geoinformatika', 'geography,cs'],
+  ].map(([c, n, tags]) => T(c, n, 'Geografiya', tags, '')),
   T('14.00.00', "Tibbiyot va sog'liqni saqlash", 'Tibbiyot', 'medicine,publichealth', "Axloq qo'mitasi xulosasi|Klinik bazadan ma'lumotnoma va joriy etish dalolatnomasi|Statistik tahlil bayonnomasi"),
   T('03.00.00', "Biologiya, kimyo, qishloq xo'jaligi va tabiiy fanlar", 'Tabiiy fanlar', 'natural,agri,chemistry,engineering', "Tajriba dalalari/laboratoriya ma'lumotnomalari|Joriy etish dalolatnomasi (fermer xo'jaligi, korxona)|Natijalar statistik tahlili"),
   T('10.00.00', "Filologiya, tilshunoslik va adabiyotshunoslik", 'Gumanitar', 'humanities,linguistics,education', "Korpus/material manbalari ro'yxati|Metodikani o'quv jarayoniga joriy etish dalolatnomasi"),
@@ -60,10 +74,10 @@ const journals = [
   S('Turkish Online Journal of Distance Education', 'Anadolu University', "Turkiya", 2000, 'free', 'Q2', 'edtech,education,highered', { acceptance: 4, review_weeks: 8 }),
   // Ta'lim: Scopus pullik
   S('Education Sciences', 'MDPI', 'Shveytsariya', 2011, 'paid', 'Q2', 'education,pedagogy,edtech,vocational', { apc_usd: 1800, wos: 1, impact_factor: 2.5, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/education' }),
-  S('Sustainability', 'MDPI', 'Shveytsariya', 2009, 'paid', 'Q1', 'education,economics,engineering,energy,natural,management', { apc_usd: 2400, wos: 1, impact_factor: 3.9, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/sustainability' }),
+  S('Sustainability', 'MDPI', 'Shveytsariya', 2009, 'paid', 'Q1', 'education,tourism,economics,engineering,energy,natural,management', { apc_usd: 2400, wos: 1, impact_factor: 3.9, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/sustainability' }),
   S('Cogent Education', 'Taylor & Francis', 'Birlashgan Qirollik', 2014, 'paid', 'Q2', 'education,pedagogy,highered', { apc_usd: 1250, wos: 1, acceptance: 4, review_weeks: 8, official_url: 'https://www.tandfonline.com/journals/oaed20' }),
   S('Empirical Research in Vocational Education and Training', 'SpringerOpen', 'Shveytsariya', 2009, 'paid', 'Q2', 'vocational,education', { apc_usd: 1900, acceptance: 3, review_weeks: 10, official_url: 'https://ervet-journal.springeropen.com' }),
-  S('SAGE Open', 'SAGE', 'AQSh', 2011, 'paid', 'Q2', 'education,humanities,social,management', { apc_usd: 1500, wos: 1, acceptance: 4, review_weeks: 8, official_url: 'https://journals.sagepub.com/home/sgo' }),
+  S('SAGE Open', 'SAGE', 'AQSh', 2011, 'paid', 'Q2', 'education,tourism,humanities,social,management', { apc_usd: 1500, wos: 1, acceptance: 4, review_weeks: 8, official_url: 'https://journals.sagepub.com/home/sgo' }),
   S('Heliyon', 'Cell Press (Elsevier)', 'Birlashgan Qirollik', 2015, 'paid', 'Q1', 'education,natural,medicine,engineering,cs,social', { apc_usd: 2500, wos: 1, acceptance: 4, review_weeks: 8, official_url: 'https://www.cell.com/heliyon' }),
   S('Universal Journal of Educational Research', 'Horizon Research Publishing', 'AQSh', 2013, 'paid', 'Q3', 'education,pedagogy', { apc_usd: 500, acceptance: 5, review_weeks: 4 }),
   S('TEM Journal', 'UIKTEN', 'Serbiya', 2012, 'paid', 'Q3', 'edtech,education,cs,management,engineering', { apc_usd: 400, acceptance: 5, review_weeks: 4 }),
@@ -87,9 +101,9 @@ const journals = [
   S('Research in International Business and Finance', 'Elsevier', 'Niderlandiya', 1986, 'free', 'Q1', 'economics,finance,management', { wos: 1, acceptance: 3, review_weeks: 14 }),
   S('Emerging Markets Finance and Trade', 'Routledge (Taylor & Francis)', 'AQSh', 1965, 'free', 'Q2', 'economics,finance', { wos: 1, acceptance: 3, review_weeks: 12 }),
   S('Post-Communist Economies', 'Routledge (Taylor & Francis)', 'Birlashgan Qirollik', 1989, 'free', 'Q2', 'economics,social', { wos: 1, acceptance: 4, review_weeks: 10, description: "Postsovet mamlakatlar iqtisodiyotiga ixtisoslashgan — O'zbekiston mavzulari uchun mos." }),
-  S('Economies', 'MDPI', 'Shveytsariya', 2013, 'paid', 'Q2', 'economics,finance,management', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/economies' }),
+  S('Economies', 'MDPI', 'Shveytsariya', 2013, 'paid', 'Q2', 'economics,tourism,finance,management', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/economies' }),
   S('Journal of Risk and Financial Management', 'MDPI', 'Shveytsariya', 2008, 'paid', 'Q2', 'finance,economics', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/jrfm' }),
-  S('Cogent Economics & Finance', 'Taylor & Francis', 'Birlashgan Qirollik', 2013, 'paid', 'Q2', 'economics,finance,management', { apc_usd: 1250, acceptance: 4, review_weeks: 8 }),
+  S('Cogent Economics & Finance', 'Taylor & Francis', 'Birlashgan Qirollik', 2013, 'paid', 'Q2', 'economics,tourism,finance,management', { apc_usd: 1250, acceptance: 4, review_weeks: 8 }),
   S('Economic Research-Ekonomska Istrazivanja', 'Taylor & Francis (Open)', 'Xorvatiya', 1988, 'paid', 'Q1', 'economics,management', { apc_usd: 1400, wos: 1, acceptance: 3, review_weeks: 10 }),
   S('Problems and Perspectives in Management', 'LLC CPC Business Perspectives', 'Ukraina', 2003, 'paid', 'Q3', 'management,economics', { apc_usd: 700, acceptance: 5, review_weeks: 6 }),
   S('Montenegrin Journal of Economics', 'Ekonomska Misao', 'Chernogoriya', 2005, 'free', 'Q3', 'economics,finance,management', { acceptance: 5, review_weeks: 8 }),
@@ -119,6 +133,24 @@ const journals = [
   S('Laws', 'MDPI', 'Shveytsariya', 2012, 'paid', 'Q2', 'law,social', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/laws' }),
   S('Social Sciences', 'MDPI', 'Shveytsariya', 2012, 'paid', 'Q2', 'social,humanities,law,education', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/socsci' }),
 
+  // ---------- Turizm va mehmonxona faoliyati (08.00.17) ----------
+  S('Tourism Management', 'Elsevier', 'Birlashgan Qirollik', 1982, 'free', 'Q1', 'tourism,management,economics', { impact_factor: 12.7, wos: 1, acceptance: 2, review_weeks: 16, official_url: 'https://www.sciencedirect.com/journal/tourism-management' }),
+  S('Annals of Tourism Research', 'Elsevier', 'Birlashgan Qirollik', 1973, 'free', 'Q1', 'tourism,social,management', { impact_factor: 9.0, wos: 1, acceptance: 2, review_weeks: 16, official_url: 'https://www.sciencedirect.com/journal/annals-of-tourism-research' }),
+  S('Journal of Travel Research', 'SAGE', 'AQSh', 1962, 'free', 'Q1', 'tourism,management,economics', { impact_factor: 10.9, wos: 1, acceptance: 2, review_weeks: 14 }),
+  S('Journal of Sustainable Tourism', 'Routledge (Taylor & Francis)', 'Birlashgan Qirollik', 1993, 'free', 'Q1', 'tourism,natural,management', { impact_factor: 9.5, wos: 1, acceptance: 2, review_weeks: 14 }),
+  S('Tourism Management Perspectives', 'Elsevier', 'Niderlandiya', 2012, 'free', 'Q1', 'tourism,management', { impact_factor: 9.0, wos: 1, acceptance: 3, review_weeks: 12 }),
+  S('Current Issues in Tourism', 'Routledge (Taylor & Francis)', 'Birlashgan Qirollik', 1998, 'free', 'Q1', 'tourism,management,economics', { impact_factor: 5.7, wos: 1, acceptance: 3, review_weeks: 10 }),
+  S('Tourism Geographies', 'Routledge (Taylor & Francis)', 'Birlashgan Qirollik', 1999, 'free', 'Q1', 'tourism,geography', { impact_factor: 6.0, wos: 1, acceptance: 3, review_weeks: 12 }),
+  S('Tourism Economics', 'SAGE', 'Birlashgan Qirollik', 1995, 'free', 'Q1', 'tourism,economics', { impact_factor: 4.5, wos: 1, acceptance: 3, review_weeks: 12 }),
+  S('Asia Pacific Journal of Tourism Research', 'Routledge (Taylor & Francis)', 'Birlashgan Qirollik', 1996, 'free', 'Q1', 'tourism,management', { impact_factor: 3.5, wos: 1, acceptance: 3, review_weeks: 10 }),
+  S('Journal of Destination Marketing & Management', 'Elsevier', 'Niderlandiya', 2012, 'free', 'Q1', 'tourism,management', { impact_factor: 8.0, wos: 1, acceptance: 3, review_weeks: 12 }),
+  S('International Journal of Hospitality Management', 'Elsevier', 'Birlashgan Qirollik', 1982, 'free', 'Q1', 'tourism,management', { impact_factor: 9.0, wos: 1, acceptance: 2, review_weeks: 14 }),
+  S('GeoJournal of Tourism and Geosites', 'Oradea University', 'Ruminiya', 2008, 'free', 'Q2', 'tourism,geography', { acceptance: 4, review_weeks: 8, description: "Turizm va geomeros bo'yicha ochiq (mualliflardan to'lov talab qilinmaydigan) jurnal." }),
+  S('Journal of Hospitality and Tourism Management', 'Elsevier', 'Avstraliya', 2001, 'free', 'Q1', 'tourism,management', { wos: 1, acceptance: 3, review_weeks: 12 }),
+  S('Journal of Outdoor Recreation and Tourism', 'Elsevier', 'Niderlandiya', 2013, 'paid', 'Q1', 'tourism,natural', { apc_usd: 2500, acceptance: 3, review_weeks: 10 }),
+  S('Tourism and Hospitality', 'MDPI', 'Shveytsariya', 2020, 'paid', 'Q2', 'tourism,management', { apc_usd: 1400, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/tourhosp' }),
+  S('Administrative Sciences', 'MDPI', 'Shveytsariya', 2011, 'paid', 'Q2', 'management,economics,tourism', { apc_usd: 1800, acceptance: 4, review_weeks: 5, official_url: 'https://www.mdpi.com/journal/admsci' }),
+
   // ---------- OAK ro'yxatidagi milliy nashrlar (NAMUNA — oak.uz bilan sinxronlang) ----------
   ...[
     ['Pedagogik mahorat', "Buxoro davlat universiteti", 'free', 'education,pedagogy,vocational'],
@@ -134,9 +166,6 @@ const journals = [
     ['Maktab va hayot', "Ilmiy-metodik jurnal", 'free', 'education,pedagogy'],
     ['Oliy ta’lim va innovatsiyalar', "Oliy ta'lim ilmiy-uslubiy jurnali", 'free', 'highered,education'],
     ['Raqamli ta’lim texnologiyalari', "Raqamli ta'lim ilmiy jurnali", 'paid', 'edtech,education,cs'],
-    ['Iqtisodiyot va ta’lim', "Iqtisodiyot va ta'lim jurnali", 'free', 'economics,education,management'],
-    ['Iqtisodiyot va innovatsion texnologiyalar', "Ilmiy elektron jurnal", 'free', 'economics,management,finance'],
-    ['Moliya va bank ishi', "Ilmiy-amaliy jurnal", 'free', 'finance,economics'],
     ['Axborot texnologiyalari muammolari', "Ilmiy jurnal", 'free', 'cs,engineering'],
     ['Muhandislik va texnologiyalar axborotnomasi', "Texnika universiteti ilmiy axborotnomasi", 'free', 'engineering,energy,materials,cs'],
     ['Energetika muammolari', "Ilmiy-texnik jurnal", 'free', 'energy,engineering'],
@@ -162,35 +191,62 @@ const journals = [
   ].map(([name, publisher, country, subjects, access, description, official_url]) => J({ name, kind: 'conference', publisher, country, subjects, access, acceptance: 4, description, official_url })),
 ];
 
+const OAK_ECON = require('./data/oak_economics.json');
+const oakEconomics = [
+  ...OAK_ECON.milliy.map((x) => ['milliy', x]), ...OAK_ECON.mdh.map((x) => ['mdh', x]), ...OAK_ECON.xorijiy.map((x) => ['xorijiy', x]),
+].map(([grp, x]) => J({
+  name: x.name, kind: 'journal', oak_status: 'active', access: 'free', acceptance: grp === 'milliy' ? 4 : 2,
+  country: grp === 'milliy' ? "O'zbekiston" : grp === 'mdh' ? 'MDH' : 'Xorijiy',
+  subjects: x.tourism ? 'economics,management,finance,tourism' : 'economics,management,finance',
+  official_url: x.url, oak_url: 'https://oak.uz/pages/31738', verified: 1,
+  description: grp === 'milliy' ? "OAK ro'yxatidagi (08.00.00 Iqtisodiyot) milliy nashr. To'lov shartlarini jurnal saytidan tekshiring."
+    : `OAK ro'yxatidagi (08.00.00) ${grp === 'mdh' ? 'MDH' : 'xorijiy'} nashr. Xorijiy maqola sifatida hisoblanishi uchun jurnalning Scopus/WoS'da FAOL indekslanganini alohida tekshiring.`,
+}));
+journals.push(...oakEconomics);
+
+const REQ_SRC = 'https://lex.uz/uz/docs/3244217';
 const requirements = [
-  { degree: 'phd', kind: 'oak', title: "OAK ro'yxatidagi milliy ilmiy nashrlarda maqolalar", min_count: 3, description: "Dissertatsiya mavzusi bo'yicha OAK tomonidan e'tirof etilgan o'zbek jurnallarida chop etilgan maqolalar. (Foydalanuvchi ko'rsatmasi asosidagi namuna: kamida 3 ta — OAK nizomi bilan tasdiqlang.)" },
-  { degree: 'phd', kind: 'foreign', title: "Xorijiy ilmiy nashrlarda (Scopus/WoS yoki xorijiy OAK tan olgan) maqolalar", min_count: 1, description: "Xalqaro e'tirofga ega xorijiy jurnallarda chop etilgan maqolalar. (Namuna — rasmiy talab bilan tasdiqlang.)" },
-  { degree: 'phd', kind: 'conf_int', title: "Xalqaro ilmiy konferensiyalarda ma'ruza/tezislar", min_count: 1, description: "Xorijda yoki xalqaro maqomdagi konferensiya materiallarida tezis." },
-  { degree: 'phd', kind: 'conf_nat', title: "Respublika ilmiy konferensiyalarida ma'ruza/tezislar", min_count: 1, description: "Respublika miqyosidagi konferensiya to'plamlarida tezis." },
-  { degree: 'dsc', kind: 'oak', title: "OAK ro'yxatidagi milliy ilmiy nashrlarda maqolalar", min_count: 10, description: "Namuna qiymat — rasmiy talabga qarab admin tahrirlaydi." },
-  { degree: 'dsc', kind: 'foreign', title: "Xorijiy (Scopus/WoS) nashrlarda maqolalar", min_count: 5, description: "Namuna qiymat." },
-  { degree: 'dsc', kind: 'monograph', title: "Monografiya", min_count: 1, description: "Namuna qiymat." },
-  { degree: 'dsc', kind: 'conf_int', title: "Xalqaro konferensiyalarda ma'ruzalar", min_count: 3, description: "Namuna qiymat." },
+  // PhD: jami 7 ta ish; shundan 3 ta maqola (1 tasi xorijiy) + 2 ta xalqaro konferensiya materiali
+  { degree: 'phd', kind: 'oak', title: "OAK ro'yxatidagi nashrlarda maqolalar (milliy)", min_count: 2, description: "PhD uchun jami kamida 3 ta maqola talab qilinadi: 2 tasi OAK ro'yxatidagi nashrlarda (bu qator) va 1 tasi nufuzli xorijiy jurnalda (keyingi qator). Ijtimoiy-gumanitar fanlarda yakka mualliflikda.", source_url: REQ_SRC, verified: 1 },
+  { degree: 'phd', kind: 'foreign', title: "Nufuzli xorijiy ilmiy jurnalda maqola (Scopus / Web of Science)", min_count: 1, description: "Eng xavfsiz yo'l — Scopus yoki Web of Science'da faol indekslangan jurnal (OAK 10.06.2026 qoidasi).", source_url: REQ_SRC, verified: 1 },
+  { degree: 'phd', kind: 'conf_int', title: "Xalqaro konferensiya to'plamida material (maqola, ma'ruza yoki tezis)", min_count: 2, description: "Kamida 2 ta material xalqaro konferensiya to'plamida.", source_url: REQ_SRC, verified: 1 },
+  { degree: 'phd', kind: 'conf_nat', title: "Qo'shimcha ilmiy ishlar (respublika konferensiyasi tezisi, preprint, patent) — jami 7 ta uchun", min_count: 2, description: "Dissertatsiya bo'yicha jami kamida 7 ta ilmiy ish bo'lishi shart (3 maqola + 2 xalqaro konferensiya materiali + yana 2 ta). Tezis, preprint va patent ilmiy ish hisoblanadi; o'quv adabiyotlari (darslik, qo'llanma) hisoblanmaydi.", source_url: REQ_SRC, verified: 1 },
+  // DSc: jami 15 ta; shundan 10 ta maqola (1 tasi xorijiy) + 2 ta xalqaro konferensiya materiali
+  { degree: 'dsc', kind: 'oak', title: "OAK ro'yxatidagi nashrlarda maqolalar", min_count: 9, description: "DSc uchun ro'yxatdagi nashrlarda jami kamida 10 ta maqola: 9 tasi shu qatorda, 1 tasi xorijiy jurnalda (keyingi qator).", source_url: REQ_SRC, verified: 1 },
+  { degree: 'dsc', kind: 'foreign', title: "Rivojlangan xorijiy mamlakatning nufuzli ixtisoslashgan jurnalida maqola", min_count: 1, description: "Scopus / Web of Science'da faol indekslangan jurnal tavsiya etiladi.", source_url: REQ_SRC, verified: 1 },
+  { degree: 'dsc', kind: 'conf_int', title: "Xalqaro konferensiya materiallari", min_count: 2, description: "Kamida 2 ta xalqaro konferensiya materiali.", source_url: REQ_SRC, verified: 1 },
+  { degree: 'dsc', kind: 'conf_nat', title: "Qo'shimcha ilmiy ishlar (tezis, preprint, patent) — jami 15 ta uchun", min_count: 3, description: "DSc uchun jami kamida 15 ta ilmiy ish (10 maqola + 2 konferensiya + yana 3 ta).", source_url: REQ_SRC, verified: 1 },
+  { degree: 'dsc', kind: 'monograph', title: "Monografiya (faqat ijtimoiy-gumanitar fanlar, 2027-yil 1-yanvargacha)", min_count: 0, description: "Ijtimoiy-gumanitar fanlar bo'yicha DSc uchun monografiya talabi 2027-yil 1-yanvardan bekor qilinadi. Agar 2026-yil oxirigacha himoya qilsangiz, bu qatorni 1 ga o'zgartiring.", source_url: REQ_SRC, verified: 1 },
 ];
 
+const CUT = '2027-01-01';
+// [key, category, title, description, phase, required, cancelled_from]
 const docs = [
-  // implementation
-  ['impl_acts', 'implementation', "Joriy etish dalolatnomalari / ma'lumotnomalar", "Tadqiqot natijalari amaliyotga (kollej, maktab, OTM, korxona) joriy etilganini tasdiqlovchi imzo va muhrli dalolatnomalar. Bir nechta turli muassasadan olish tavsiya etiladi.", 'mid', 1],
-  ['experiment_ref', 'experiment', "Tajriba-sinov ishlari o'tkazilgani to'g'risida ma'lumotnoma", "Tajriba-sinov o'tkazilgan muassasalardan sana, ishtirokchilar soni va natijalar ko'rsatilgan ma'lumotnoma.", 'mid', 1],
-  ['experiment_stats', 'experiment', "Tajriba-sinov natijalarining statistik tahlili", "Tajriba va nazorat guruhlari natijalari, statistik mezonlar (masalan, Student, Pirson χ²) va xulosalar jadvali.", 'mid', 1],
-  ['survey', 'experiment', "So'rovnoma / test materiallari va ishonchlilik tahlili", "So'rovnoma shakllari, respondentlar soni, Kronbax alfa kabi ishonchlilik ko'rsatkichlari.", 'early', 0],
-  ['edu_materials', 'implementation', "Ishlab chiqilgan o'quv-metodik materiallar (o'quv qo'llanma, modul, metodik tavsiya)", "Metod kengashi / ilmiy kengash tomonidan tasdiqlangan o'quv-metodik ishlanmalar (bayonnoma nusxasi bilan).", 'mid', 0],
-  ['dgu', 'implementation', "Dasturiy mahsulot / intellektual mulk guvohnomasi", "Agar tadqiqot dasturiy mahsulot yoki ishlanma yaratsa — Intellektual mulk agentligi guvohnomasi (tegishli yo'nalishlar uchun).", 'mid', 0],
-  // defense
-  ['dissertation', 'defense', "Dissertatsiya matni (talab qilingan shaklda)", "Kirish, boblar, xulosa va tavsiyalar, foydalanilgan adabiyotlar, ilovalar. Rasmiylashtirish talablariga mosligini tekshiring.", 'late', 1],
-  ['autoref', 'defense', "Dissertatsiya avtoreferati (o'zbek, rus, ingliz tillarida)", "Belgilangan hajm va shaklda, uch tilda xulosalar bilan.", 'late', 1],
-  ['pubs_list', 'defense', "Ilmiy ishlar ro'yxati va nashr nusxalari", "Barcha maqolalar, tezislar, qo'llanmalarning ro'yxati va tasdiqlangan nusxalari; OAK/Scopus ro'yxatlariga kirishini tasdiqlovchi havolalar.", 'late', 1],
-  ['antiplagiat', 'defense', "Antiplagiat tekshiruvi xulosasi", "Dissertatsiya va avtoreferat uchun rasmiy antiplagiat tekshiruvi xulosasi.", 'late', 1],
-  ['supervisor_opinion', 'defense', "Ilmiy rahbar (maslahatchi) xulosasi", "Dissertatsiya bajarilganligi va himoyaga tavsiyasi to'g'risida yozma fikr.", 'late', 1],
-  ['dept_conclusion', 'defense', "Kafedra / laboratoriya yig'ilishi xulosasi (dastlabki muhokama)", "Bajarilgan ish dastlabki muhokamadan o'tgani to'g'risida bayonnoma ko'chirmasi.", 'late', 1],
-  ['personal_docs', 'admin', "Shaxsiy hujjatlar to'plami", "Ariza, tarjimai hol, diplom nusxalari, mehnat daftarchasi ko'chirmasi, fotosurat, til bilimi sertifikati (agar talab qilinsa).", 'late', 1],
-  ['council_app', 'admin', "Ilmiy kengashga ariza va ro'yxatdan o'tish hujjatlari", "Himoya kengashiga topshiriladigan rasmiy ariza va ilova hujjatlar to'plami.", 'late', 1],
-  ['topic_approval', 'admin', "Dissertatsiya mavzusi va ilmiy rahbarni tasdiqlash", "Mavzu OTM ilmiy kengashida tasdiqlanishi va (talab etilsa) OAK tizimida ro'yxatdan o'tkazilishi.", 'early', 1],
+  // --- tajriba-sinov va joriy etish ---
+  ['impl_acts', 'implementation', "Natijalarni amaliyotga joriy etish hujjatlari (dalolatnoma, patent, tavsiya)", "Joriy etish haqida OAK xulosasi olish talabi 2027-yil 1-yanvardan bekor bo'ladi, ammo natijaning ahamiyati baribir baholanadi. Shakllari: patent; tugallangan grant loyihasida foydalanilishi; NHH loyihasida foydalanilishi; ta'lim jarayoniga tatbiq (PhD: o'quv qo'llanma); davlat organi yoki xo'jalik boshqaruvi organi ilmiy-texnik kengashi tavsiyasi.", 'mid', 1, CUT],
+  ['experiment_ref', 'experiment', "Tajriba-sinov ishlari o'tkazilgani to'g'risida ma'lumotnoma", "Tajriba-sinov o'tkazilgan muassasalardan sana, ishtirokchilar soni va natijalar ko'rsatilgan ma'lumotnoma.", 'mid', 1, ''],
+  ['experiment_stats', 'experiment', "Tajriba-sinov natijalarining statistik tahlili", "Tajriba va nazorat guruhlari natijalari, statistik mezonlar (masalan, Student, Pirson χ²) va xulosalar jadvali.", 'mid', 1, ''],
+  ['survey', 'experiment', "So'rovnoma / test materiallari va ishonchlilik tahlili", "So'rovnoma shakllari, respondentlar soni, Kronbax alfa kabi ishonchlilik ko'rsatkichlari.", 'early', 0, ''],
+  ['edu_materials', 'implementation', "Ishlab chiqilgan o'quv-metodik materiallar (o'quv qo'llanma, modul, metodik tavsiya)", "Metod kengashi / ilmiy kengash tomonidan tasdiqlangan ishlanmalar. Diqqat: o'quv adabiyotlari (darslik, qo'llanma) OAK talab qilgan ilmiy ishlar sonini TO'LDIRMAYDI.", 'mid', 0, ''],
+  ['dgu', 'implementation', "Dasturiy mahsulot / intellektual mulk guvohnomasi yoki patent", "Patent va ishlanmalar ilmiy ish hisoblanadi va joriy etish shakli sifatida ham qabul qilinadi.", 'mid', 0, ''],
+  ['coauthor_consent', 'defense', "Hammualliflarning yozma roziligi", "Hammualliflikdagi har bir maqola uchun hammualliflarning yozma roziligi. Ijtimoiy-gumanitar fanlarda asosiy ishlar yakka mualliflikda bo'lishi kerak.", 'mid', 0, ''],
+  ['scopus_proof', 'defense', "Xorijiy maqola indekslanganligini tasdiqlovchi isbot (Scopus / Web of Science)", "Maqola chop etilgan jurnalning Scopus yoki WoS'da FAOL indekslanganligini tasdiqlovchi havola va skrinshotlar (jurnal OAK 'Scopus'dan chiqarilganlar' ro'yxatida emasligini ham tekshiring).", 'mid', 1, ''],
+  // --- malakaviy imtihonlar ---
+  ['specialty_exam', 'admin', "Mutaxassislik fani bo'yicha malakaviy imtihon", "Himoyaga faqat tegishli malakaviy imtihonlarni topshirgan izlanuvchilar qo'yiladi.", 'mid', 1, ''],
+  ['foreign_lang_exam', 'admin', "Chet tili bo'yicha malakaviy imtihon", "PF-98: 2027-yil 1-yanvardan bekor qilinadi (mustaqil izlanuvchilar bundan mustasno — ular topshirishda davom etadi).", 'mid', 1, CUT],
+  // --- himoya hujjatlari ---
+  ['dissertation', 'defense', "Dissertatsiya matni", "Kirish (barcha majburiy bandlar), PhD uchun kamida 3 bob / DSc uchun kamida 4 bob, xulosalar, adabiyotlar. Hajm: PhD 60 varaq, DSc 100 varaq (ijtimoiy-gumanitarda +30%). Har bob oxirida xulosa.", 'late', 1, ''],
+  ['autoref', 'defense', "Dissertatsiya avtoreferati", "Avtoreferatni chop etish talabi 2027-yil 1-yanvardan bekor bo'ladi. Avtoreferatning nizomga muvofiqligi (kirish qismi, ilmiy yangilik, joriy etish, nashrlar, internetda joylashtirilishi) uchun javobgarlik ilmiy kengashda.", 'late', 1, CUT],
+  ['pubs_list', 'defense', "Ilmiy ishlar ro'yxati va nashr nusxalari", "Barcha maqolalar, tezislar, patentlar ro'yxati va nusxalari: PhD uchun jami 7 ta (3 maqola, 1 tasi xorijiy; 2 xalqaro konferensiya materiali), DSc uchun 15 ta. Nashrga topshirilgan, lekin chiqmagan ishlar ko'rsatilmaydi.", 'late', 1, ''],
+  ['antiplagiat', 'defense', "Antiplagiat tekshiruvi xulosasi", "Ko'chirmachilik aniqlansa, dissertatsiya muhokamadan olinadi va shu mavzuda qayta himoya huquqi yo'qoladi.", 'late', 1, ''],
+  ['supervisor_opinion', 'defense', "Ilmiy rahbar (maslahatchi) xulosasi", "Dissertatsiya bajarilganligi va himoyaga tavsiyasi to'g'risida yozma fikr.", 'late', 1, ''],
+  ['prelim_expertise', 'defense', "Muassasa ilmiy seminarining dastlabki ekspertiza xulosasi", "Xulosa PhD uchun 2 oy, DSc uchun 3 oy ichida beriladi — vaqtni oldindan rejalashtiring.", 'late', 1, ''],
+  ['leading_org', 'defense', "Dissertatsiyani yetakchi tashkilotda muhokama qilish", "PF-98: 2027-yil 1-yanvardan bekor qilinadi.", 'late', 1, CUT],
+  ['oak_topic_reg', 'admin', "Mavzuni OAKda ro'yxatdan o'tkazish va himoya haqida OAK e'loni", "PF-98: 2027-yil 1-yanvardan bekor. 2027-yilgacha OAK e'lon bergan va himoyani o'tkazganlarga daraja eski tartib bo'yicha beriladi.", 'late', 1, CUT],
+  ['oak_expert', 'admin', "OAK ekspert kengashi ilmiy ekspertizasi va ilmiy kengash qarorining OAK tomonidan tasdiqlanishi", "PF-98: 2027-yil 1-yanvardan bekor; daraja ilmiy kengash qarori bilan beriladi (kengash qarorini OAK tanlov asosida tekshirishi va bekor qilishi mumkin).", 'late', 1, CUT],
+  ['personal_docs', 'admin', "Shaxsiy hujjatlar to'plami", "Ariza, tarjimai hol, diplom nusxalari, mehnat daftarchasi ko'chirmasi, fotosurat. Ilmiy daraja berish my.gov.uz orqali (2026-yil dekabrdan) o'tishi kutilmoqda.", 'late', 1, ''],
+  ['council_app', 'admin', "Ilmiy kengashga ariza va hujjatlar to'plami", "Himoya kengashiga topshiriladigan rasmiy ariza va ilovalar. Kengashlar ro'yxati: oak.uz/pages/36, /37, /38.", 'late', 1, ''],
+  ['topic_approval', 'admin', "Dissertatsiya mavzusi va ilmiy rahbarni tasdiqlash", "Mavzu muassasa ilmiy kengashida tasdiqlanadi.", 'early', 1, ''],
 ];
 
 const quotes = [
@@ -206,19 +262,36 @@ const quotes = [
   ['Santyago Ramon-i-Kaxal', "Miyaning qaysi sohasini rivojlantirmoqchi bo‘lsangiz, o‘sha sohada qat’iyat bilan mashq qiling.", "Ramon-i-Kaxal asarlaridagi fikr mazmuni"],
 ];
 
+const SEED_VERSION = 2;
+
 function seedAll(db) {
-  const n = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
+  const { getSetting, setSetting } = require('./db');
   const ins = (table, obj) => {
     const keys = Object.keys(obj);
     db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`).run(...keys.map((k) => obj[k]));
   };
+  const n = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
+  const version = Number(getSetting(db, 'seed_version', '0'));
+  if (version >= SEED_VERSION) return;
   db.exec('BEGIN');
   try {
-    if (!n('directions')) directions.forEach((d) => ins('directions', d));
-    if (!n('journals')) journals.forEach((j) => ins('journals', j));
-    if (!n('requirements')) requirements.forEach((r) => ins('requirements', r));
-    if (!n('doc_templates')) docs.forEach(([key, category, title, description, phase, required]) => ins('doc_templates', { key, category, title, description, phase, required }));
+    // yangi o'rnatishda yoki yangilashda — mavjud (admin tahrirlagan) yozuvlarga tegmasdan, yetishmayotganlarini qo'shamiz
+    for (const d of directions) if (!db.prepare('SELECT 1 FROM directions WHERE code=?').get(d.code)) ins('directions', d);
+    const have = new Set(db.prepare('SELECT lower(name) n FROM journals').all().map((r) => r.n));
+    for (const j of journals) if (!have.has(j.name.toLowerCase())) { ins('journals', j); have.add(j.name.toLowerCase()); }
+    for (const [key, category, title, description, phase, required, cancelled_from] of docs) {
+      const row = db.prepare('SELECT id FROM doc_templates WHERE key=?').get(key);
+      if (!row) ins('doc_templates', { key, category, title, description, phase, required, cancelled_from });
+      else if (version < 2) db.prepare('UPDATE doc_templates SET category=?, title=?, description=?, phase=?, required=?, cancelled_from=? WHERE id=?').run(category, title, description, phase, required, cancelled_from, row.id);
+    }
+    // tekshirilmagan (namuna) talablar rasmiy ma'lumotnoma bilan almashtiriladi; admin tasdiqlaganlari saqlanadi
+    if (version < 2) {
+      db.prepare("DELETE FROM requirements WHERE verified=0").run();
+      for (const r of requirements) if (!db.prepare('SELECT 1 FROM requirements WHERE degree=? AND kind=?').get(r.degree, r.kind)) ins('requirements', r);
+      db.prepare("DELETE FROM journals WHERE verified=0 AND name IN ('Iqtisodiyot va ta’lim','Iqtisodiyot va innovatsion texnologiyalar','Moliya va bank ishi')").run();
+    }
     if (!n('quotes')) quotes.forEach(([author, text, note]) => ins('quotes', { author, text, note }));
+    setSetting(db, 'seed_version', SEED_VERSION);
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
 }

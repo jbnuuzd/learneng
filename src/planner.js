@@ -18,6 +18,7 @@ const KIND_RULES = {
   dgu:       { from: 0.4,  to: 0.8,  lead: 1, label: "Intellektual mulk guvohnomasini rasmiylashtirish", unit: 'guvohnoma', weight: 2 },
 };
 
+const { CUTOFF } = require('./knowledge');
 const MONTHS_UZ = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun', 'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr'];
 
 function monthLabel(startMonth, offset) {
@@ -43,6 +44,10 @@ function buildPlan({ months, startMonth, requirements, docTemplates, direction }
   const start = startMonth || currentMonth();
   const plan = Array.from({ length: M }, (_, i) => ({ index: i + 1, label: monthLabel(start, i), tasks: [] }));
   const warnings = [];
+  const endIso = new Date(Date.UTC(Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1 + M, 0)).toISOString().slice(0, 10);
+  const newRegime = endIso >= CUTOFF;
+  if (newRegime) warnings.push("Rejangiz 2027-yil 1-yanvardan keyin tugaydi: PF-98 bo'yicha avtoreferat chop etish, OAKda mavzu ro'yxati va himoya e'loni, yetakchi tashkilotda muhokama, joriy etish xulosasi va OAK tasdig'i kabi talablar bekor qilinadi (tegishli vazifalar «ixtiyoriy / 2027 dan bekor» deb belgilandi). Yangi nizomlar hali tasdiqlanmagan — «OAK ma'lumotnomasi» sahifasini kuzatib boring.");
+  else warnings.push("Rejangiz 2027-yil 1-yanvargacha tugaydi: himoya ESKI tartib bo'yicha o'tadi. OAK himoya e'lonini berib, himoyani 2026-yil oxirigacha o'tkazishga ulgurish uchun muddatlarga qat'iy rioya qiling.");
   const add = (mi, t) => plan[Math.min(M - 1, Math.max(0, mi))].tasks.push(t);
 
   // 1) Boshlang'ich ishlar
@@ -76,7 +81,8 @@ function buildPlan({ months, startMonth, requirements, docTemplates, direction }
     if (d.key === 'topic_approval') continue;
     if (d.directions && !d.directions.split(',').some((t) => dirTags.has(t.trim()))) continue;
     const [a, b] = phaseRange[d.phase] || phaseRange.late;
-    add(d.phase === 'mid' ? Math.min(b, a + 1) : a, { key: `doc-${d.key}`, kind: 'doc', title: d.title, weight: d.required ? 1.5 : 1, docKey: d.key, optional: !d.required });
+    const cancelled = !!d.cancelled_from && endIso >= d.cancelled_from;
+    add(d.phase === 'mid' ? Math.min(b, a + 1) : a, { key: `doc-${d.key}`, kind: 'doc', title: cancelled ? `${d.title} (2027-yil 1-yanvardan bekor)` : d.title, weight: d.required && !cancelled ? 1.5 : 1, docKey: d.key, optional: !d.required || cancelled, cancelled });
   }
   add(lastIdx, { key: 'final-defense-prep', kind: 'final', title: "Dissertatsiyani himoyaga topshirish: barcha hujjatlar to'plamini yakuniy tekshirish", weight: 3 });
 
@@ -85,7 +91,7 @@ function buildPlan({ months, startMonth, requirements, docTemplates, direction }
   plan.forEach((p) => p.tasks.forEach((t) => { while (seen.has(t.key)) t.key += '_'; seen.add(t.key); }));
 
   const totalWeight = plan.reduce((s, p) => s + p.tasks.reduce((x, t) => x + t.weight, 0), 0);
-  return { months: plan, warnings, totalWeight, startMonth: start, hardTotal };
+  return { months: plan, warnings, totalWeight, startMonth: start, hardTotal, newRegime, endIso };
 }
 
 function progress(plan, doneKeys) {

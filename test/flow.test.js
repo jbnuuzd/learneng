@@ -90,3 +90,42 @@ test('SCImago CSV parsing', () => {
   const [it] = feeds.parseFeed(csv);
   assert.equal(it.name, 'Computers & Education'); assert.equal(it.quartile, 'Q1'); assert.equal(it.issn, '03601315');
 });
+
+test('OAK ma’lumotnomasi: talablar, rejim va turizm yo‘nalishi', async (t) => {
+  delete process.env.ANTHROPIC_API_KEY;
+  const db = open(':memory:'); seedAll(db);
+  auth.ensureAdmin(db, { ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'S3cret-pass' }, () => {});
+  const server = createApp(db).listen(0);
+  t.after(() => server.close());
+  const u = client(`http://127.0.0.1:${server.address().port}`);
+  await u('POST', '/register', { login: 'turist', password: 'password1', full_name: 'Test Tadqiqotchi' });
+
+  // PhD: 7 ta ish = 2 OAK + 1 xorijiy + 2 xalqaro konf + 2 qo'shimcha
+  const reqs = db.prepare("SELECT kind, min_count FROM requirements WHERE degree='phd'").all();
+  assert.equal(reqs.reduce((s, r) => s + r.min_count, 0), 7);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM requirements WHERE verified=0").get().c === 0);
+
+  // eski tartib (2026 da tugaydi) va yangi tartib (2027 dan keyin)
+  await u('PUT', '/profile', { status: 'doctoral', degree: 'phd', direction_code: '08.00.17', topic: 'Turizm va mehmonxona faoliyatida raqamli marketing', months: 3, start_month: '2026-10' });
+  let plan = (await u('GET', '/plan')).data;
+  assert.match(plan.warnings.join(' '), /ESKI tartib/);
+  assert.ok(plan.months.flatMap((m) => m.tasks).find((x) => x.key === 'doc-autoref' && !x.optional));
+  await u('PUT', '/profile', { status: 'doctoral', degree: 'phd', direction_code: '08.00.17', topic: 'Turizm va mehmonxona faoliyatida raqamli marketing', months: 12, start_month: '2026-10' });
+  plan = (await u('GET', '/plan')).data;
+  assert.match(plan.warnings.join(' '), /PF-98/);
+  assert.ok(plan.months.flatMap((m) => m.tasks).find((x) => x.key === 'doc-autoref' && x.optional && x.cancelled));
+  const docs = (await u('GET', '/documents')).data;
+  assert.equal(docs.newRegime, true);
+  assert.ok(docs.docs.find((d) => d.key === 'leading_org').cancelled);
+
+  // turizm: 10 ta Scopus (bepul) va OAK (bepul) tavsiya
+  const sc = (await u('GET', '/journals?category=scopus&access=free')).data.items;
+  assert.equal(sc.length, 10);
+  assert.ok(sc.filter((j) => j.subjects.includes('tourism')).length >= 8);
+  const oak = (await u('GET', '/journals?category=oak&access=free')).data.items;
+  assert.equal(oak.length, 10);
+  assert.ok(oak.every((j) => j.oak_status === 'active' && j.verified === 1));
+
+  const k = (await u('GET', '/knowledge')).data;
+  assert.ok(k.sections.length >= 7 && k.links.length > 5);
+});

@@ -9,6 +9,7 @@ const ai = require('./src/ai');
 const rec = require('./src/recommend');
 const feeds = require('./src/feeds');
 const planner = require('./src/planner');
+const { knowledge } = require('./src/knowledge');
 
 const PUBLIC = path.join(__dirname, 'public');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -21,7 +22,7 @@ const ENTITIES = {
   journals: { table: 'journals', order: 'name', cols: ['name', 'kind', 'issn', 'publisher', 'country', 'since_year', 'access', 'apc_usd', 'scopus_status', 'quartile', 'oak_status', 'impact_factor', 'wos', 'subjects', 'acceptance', 'review_weeks', 'official_url', 'scopus_url', 'oak_url', 'description', 'verified'], track: ['scopus_status', 'quartile', 'oak_status', 'impact_factor', 'access'] },
   directions: { table: 'directions', pk: 'code', order: 'code', cols: ['code', 'name', 'field_group', 'tags', 'hints'] },
   requirements: { table: 'requirements', order: 'degree, id', cols: ['degree', 'kind', 'title', 'min_count', 'description', 'source_url', 'verified'] },
-  doc_templates: { table: 'doc_templates', order: 'id', cols: ['key', 'category', 'title', 'description', 'phase', 'required', 'directions'] },
+  doc_templates: { table: 'doc_templates', order: 'id', cols: ['key', 'category', 'title', 'description', 'phase', 'required', 'directions', 'cancelled_from'] },
   quotes: { table: 'quotes', order: 'id', cols: ['author', 'text', 'note'] },
 };
 const INTS = new Set(['since_year', 'apc_usd', 'wos', 'acceptance', 'review_weeks', 'verified', 'min_count', 'required']);
@@ -65,6 +66,8 @@ function createApp(db) {
     ai: ai.enabled(),
     notice: 'Platformadagi jurnal kvartillari, to‘lov shartlari va OAK talablari «tekshirilmagan» deb belgilangan namuna ma’lumotlar bo‘lishi mumkin. Rasmiy manbalar (scopus.com, scimagojr.com, oak.uz) bilan solishtiring.',
   }));
+
+  route('GET', '/api/knowledge', 'public', () => knowledge);
 
   route('POST', '/api/register', 'public', (req, body, ctx) => {
     const login = String(body.login || '').trim().toLowerCase();
@@ -188,9 +191,9 @@ function createApp(db) {
     uc.plan.months.forEach((m) => m.tasks.forEach((t) => { if (t.docKey) monthOf.set(t.docKey, m.label); }));
     const docs = uc.docTemplates
       .filter((d) => !d.directions || d.directions.split(',').some((t) => dirTags.has(t.trim())))
-      .map((d) => ({ ...d, taskKey: `doc-${d.key}`, done: uc.doneKeys.has(`doc-${d.key}`), plannedMonth: monthOf.get(d.key) || null }));
+      .map((d) => ({ ...d, cancelled: !!d.cancelled_from && uc.plan.endIso >= d.cancelled_from, taskKey: `doc-${d.key}`, done: uc.doneKeys.has(`doc-${d.key}`), plannedMonth: monthOf.get(d.key) || null }));
     const hints = String(uc.direction?.hints || '').split('|').filter(Boolean);
-    return { docs, hints, requirements: requirementStatus(uc), direction: uc.direction };
+    return { docs, hints, requirements: requirementStatus(uc), direction: uc.direction, newRegime: uc.plan.newRegime };
   });
 
   route('GET', '/api/journals', 'user', async (req, body, ctx) => {

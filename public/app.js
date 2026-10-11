@@ -80,7 +80,7 @@ function authView() {
 }
 
 // ---------------- Layout ----------------
-const USER_NAV = [['#/', 'Bosh sahifa'], ['#/profile', 'Profil'], ['#/plan', 'Trayektoriya'], ['#/documents', 'Hujjatlar'], ['#/j/scopus', 'Scopus'], ['#/j/oak', 'OAK'], ['#/j/impact', 'Impakt faktor'], ['#/j/conference', 'Konferensiyalar']];
+const USER_NAV = [['#/', 'Bosh sahifa'], ['#/profile', 'Profil'], ['#/plan', 'Trayektoriya'], ['#/documents', 'Hujjatlar'], ['#/oak', 'OAK ma’lumotnomasi'], ['#/j/scopus', 'Scopus'], ['#/j/oak', 'OAK'], ['#/j/impact', 'Impakt faktor'], ['#/j/conference', 'Konferensiyalar']];
 const ADMIN_NAV = [['#/admin', 'Statistika'], ['#/admin/users', 'Foydalanuvchilar'], ['#/admin/journals', 'Jurnallar'], ['#/admin/import', 'Fid / import'], ['#/admin/directions', "Yo'nalishlar"], ['#/admin/requirements', 'OAK talablari'], ['#/admin/doc_templates', 'Hujjat shablonlari'], ['#/admin/quotes', 'Iqtiboslar'], ['#/admin/changes', "O'zgarishlar"]];
 
 function layout(content) {
@@ -178,16 +178,26 @@ async function documentsView() {
   if (d.needProfile) return needProfile();
   const cats = { experiment: 'Tajriba-sinov ishlari', implementation: 'Joriy etish va amaliyot', defense: 'Himoya hujjatlari', admin: 'Rasmiy / ma’muriy' };
   return h('div', {}, h('h1', {}, 'Himoya uchun kerakli hujjatlar'),
+    d.newRegime ? h('div', { class: 'alert amber' }, "Rejangiz 2027-yil 1-yanvardan keyin tugaydi — PF-98 bo'yicha bekor qilinadigan talablar «bekor» deb belgilangan. Yangi nizomlar tasdiqlanguncha ularni ham rasmiy manbada tekshiring.") : h('div', { class: 'alert blue' }, 'Himoyangiz 2027-yil 1-yanvargacha rejalashtirilgan: ESKI tartib amal qiladi (OAK e’loni, yetakchi tashkilot, joriy etish xulosasi, avtoreferat va h.k.).'),
     h('p', { class: 'muted' }, "Bu ro'yxat yo'nalishingizga moslashtirilgan. Hech qaysi hujjat oxirgi daqiqada esdan chiqmasligi uchun har birini bajarilgach belgilang."),
     d.hints.length ? h('div', { class: 'card' }, h('h3', {}, `${d.direction.code} yo'nalishi bo'yicha tavsiya etiladigan ma'lumotnomalar va joriy etish hujjatlari`), h('ul', {}, d.hints.map((x) => h('li', {}, x))), h('div', { class: 'small muted' }, "Tavsiyalar umumiy amaliyotga asoslangan. Aniq talablarni dissertatsiya kengashi va ilmiy rahbaringiz bilan tasdiqlang.")) : null,
     Object.entries(cats).map(([k, title]) => {
       const items = d.docs.filter((x) => x.category === k);
       return items.length ? h('div', { class: 'card' }, h('h3', {}, title), items.map((x) => {
         const row = taskRow({ key: x.taskKey, done: x.done, title: x.title, optional: !x.required });
-        return h('div', {}, row, h('div', { class: 'small muted', style: 'margin:-4px 0 8px 28px' }, x.description, x.plannedMonth ? ` · Rejada: ${x.plannedMonth}` : ''));
+        return h('div', {}, row, h('div', { class: 'small muted', style: 'margin:-4px 0 8px 28px' }, x.cancelled ? h('span', { class: 'pill warn' }, `${x.cancelled_from} dan bekor`) : null, x.description, x.plannedMonth ? ` · Rejada: ${x.plannedMonth}` : ''));
       })) : null;
     }),
     h('h2', {}, 'Nashr talablari'), h('div', { class: 'card' }, reqTable(d.requirements)));
+}
+
+// ---------------- OAK ma'lumotnomasi ----------------
+async function oakView() {
+  const k = await api('/knowledge');
+  return h('div', {}, h('h1', {}, 'OAK ma’lumotnomasi'),
+    h('div', { class: 'alert amber' }, k.warning), h('p', { class: 'small muted' }, `Ma’lumotlar holati: ${k.asOf}. Manba: oak.uz va lex.uz.`),
+    k.sections.map((sec) => h('div', { class: 'card' }, h('h3', {}, sec.title), h('ul', {}, sec.items.map((x) => h('li', {}, x))), sec.source ? h('div', { class: 'small' }, link(sec.source, 'Rasmiy manba ↗')) : null)),
+    h('div', { class: 'card' }, h('h3', {}, 'Foydali havolalar'), h('ul', {}, k.links.map(([t, u]) => h('li', {}, link(u, t))))));
 }
 
 // ---------------- Journals ----------------
@@ -258,7 +268,7 @@ async function adminUsers() {
       h('td', {}, h('button', { class: 'danger', onclick: async () => { if (confirm(`${u.full_name} o‘chirilsinmi?`)) { await api(`/admin/users/${u.id}`, { method: 'DELETE', body: {} }); render(); } } }, 'O‘chirish')))))));
 }
 
-const LABELS = { name: 'Nomi', kind: 'Turi (journal/conference)', issn: 'ISSN', publisher: 'Nashriyot', country: 'Mamlakat', since_year: 'Boshlangan yil', access: 'Kirish (free/paid)', apc_usd: 'Nashr to‘lovi, USD', scopus_status: 'Scopus (none/active/discontinued)', quartile: 'Kvartil (Q1–Q4)', oak_status: 'OAK (none/active/removed)', impact_factor: 'Impakt faktor', wos: 'WoS (0/1)', subjects: 'Teglar (vergul bilan)', acceptance: 'Qabul ehtimoli 1–5', review_weeks: 'Ko‘rib chiqish, hafta', official_url: 'Rasmiy sayt URL', scopus_url: 'Scopus isbot havolasi', oak_url: 'OAK havolasi', description: 'Tavsif', verified: 'Tasdiqlangan (0/1)', code: 'Kod', field_group: 'Soha guruhi', tags: 'Teglar', hints: "Maslahatlar ('|' bilan ajrating)", degree: 'Daraja (phd/dsc)', title: 'Sarlavha', min_count: 'Minimal soni', source_url: 'Manba URL', key: 'Kalit', category: 'Kategoriya', phase: 'Bosqich (early/mid/late)', required: 'Majburiy (0/1)', directions: "Yo'nalish teglari (bo'sh=hammaga)", author: 'Muallif', text: 'Matn', note: 'Izoh' };
+const LABELS = { name: 'Nomi', kind: 'Turi (journal/conference)', issn: 'ISSN', publisher: 'Nashriyot', country: 'Mamlakat', since_year: 'Boshlangan yil', access: 'Kirish (free/paid)', apc_usd: 'Nashr to‘lovi, USD', scopus_status: 'Scopus (none/active/discontinued)', quartile: 'Kvartil (Q1–Q4)', oak_status: 'OAK (none/active/removed)', impact_factor: 'Impakt faktor', wos: 'WoS (0/1)', subjects: 'Teglar (vergul bilan)', acceptance: 'Qabul ehtimoli 1–5', review_weeks: 'Ko‘rib chiqish, hafta', official_url: 'Rasmiy sayt URL', scopus_url: 'Scopus isbot havolasi', oak_url: 'OAK havolasi', description: 'Tavsif', verified: 'Tasdiqlangan (0/1)', code: 'Kod', field_group: 'Soha guruhi', tags: 'Teglar', hints: "Maslahatlar ('|' bilan ajrating)", degree: 'Daraja (phd/dsc)', title: 'Sarlavha', min_count: 'Minimal soni', source_url: 'Manba URL', key: 'Kalit', category: 'Kategoriya', cancelled_from: 'Bekor qilinish sanasi (YYYY-MM-DD)', phase: 'Bosqich (early/mid/late)', required: 'Majburiy (0/1)', directions: "Yo'nalish teglari (bo'sh=hammaga)", author: 'Muallif', text: 'Matn', note: 'Izoh' };
 const LONG = new Set(['description', 'hints', 'text']);
 const SHOW = { journals: ['name', 'kind', 'access', 'scopus_status', 'quartile', 'oak_status', 'verified'], directions: ['code', 'name', 'tags'], requirements: ['degree', 'kind', 'title', 'min_count', 'verified'], doc_templates: ['key', 'category', 'title', 'phase'], quotes: ['author', 'text'] };
 const ENTITY_TITLES = { journals: 'Jurnallar va konferensiyalar', directions: "Tadqiqot yo'nalishlari", requirements: 'OAK minimal talablari', doc_templates: 'Hujjat shablonlari', quotes: 'Iqtiboslar' };
@@ -334,6 +344,7 @@ async function render() {
     } else if (hash === '#/profile') view = await profileView();
     else if (hash === '#/plan') view = await planView();
     else if (hash === '#/documents') view = await documentsView();
+    else if (hash === '#/oak') view = await oakView();
     else if (/^#\/j\/(scopus|oak|impact|conference)$/.test(hash)) view = await journalsView(hash.split('/')[2]);
     else view = await dashboardView();
   } catch (e) { view = h('div', { class: 'alert red' }, e.message); }

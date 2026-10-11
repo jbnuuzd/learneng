@@ -43,18 +43,19 @@ o'rniga yangi jurnal tavsiya etiladi (faol tavsiyalar yana 10 ta). Kvartili ko't
 OAK talablari / hujjat shablonlari / iqtiboslar CRUD, fid import (SCImago CSV, OAK ro'yxati, AI yordamida matndan
 ajratish), jurnallardagi o'zgarishlar tarixi.
 
-## ⚠️ Ma'lumotlar haqida muhim eslatma
+## OAK ma'lumotnomasi (rasmiy manba asosida)
 
-Quyidagilar **namuna** sifatida kiritilgan va `tekshirilmagan` deb belgilangan; ularni ishga tushirishdan oldin tasdiqlang:
+`src/data/oak_reference.md` — oak.uz va lex.uz dan yig'ilgan ma'lumotnoma (2026-yil 11-oktabr holati). Undan olingan:
 
-* jurnallar kvartili, to'lov shartlari, OAK ro'yxati holati (`src/seed.js`) — rasmiy manbalar: scopus.com, scimagojr.com, oak.uz;
-* OAK minimal talablari (`requirements` jadvali: PhD uchun 3 ta milliy maqola va h.k.) — rasmiy nizom (oak.uz / lex.uz) bilan solishtirib,
-  admin kabinetida tahrirlab «Tasdiqlangan» deb belgilang;
-* milliy (OAK) jurnallar ro'yxati to'liq emas — oak.uz dagi ro'yxatni «Fid / import» orqali yuklang.
+* **PhD / DSc minimal talablari** (`requirements` jadvali, `verified=1`): PhD — jami 7 ta ish: 3 ta maqola (1 tasi xorijiy) + 2 ta xalqaro konferensiya materiali + 2 ta qo'shimcha; DSc — jami 15 ta, 10 ta maqola (1 xorijiy), 2 ta konferensiya.
+* **PF-98 (26.05.2026)**: 2027-yil 1-yanvardan bekor bo'ladigan tartiblar (`doc_templates.cancelled_from`). Trayektoriya muddati 2027-yilgacha tugasa — eski tartib, keyin tugasa — bekor qilinadigan vazifalar «ixtiyoriy / 2027 dan bekor» deb belgilanadi.
+* **10.06.2026 qoidasi**: A/B/C bazalar, tan olinmaydigan indekslar, DOI/ResearchGate yetarli emasligi — «OAK ma'lumotnomasi» sahifasida.
+* **08.00.00 Iqtisodiyot** bo'yicha OAK ro'yxatidagi 180 ta jurnal (milliy, MDH, xorijiy) — OAK bo'limiga yuklangan; 08.00.01–08.00.19 (jumladan **08.00.17 Turizm va mehmonxona faoliyati**) va 11.00.xx ixtisosliklari.
 
-Dasturlash muhitida internetga chiqish cheklangani sababli oak.uz va Scopus bilan jonli integratsiya sinab ko'rilmagan: u
-fid formatlari (SCImago CSV, JSON) orqali qurilgan va testlangan. Scopus rasmiy API'si kalit talab qiladi; SCImago ma'lumotlari
-bepul CSV sifatida yuklab olinadi.
+## ⚠️ Ma'lumotlar haqida eslatma
 
-Admin panelidagi «Qamrov» jadvalida har bir yo'nalish/toifa uchun nomzod jurnallar soni ko'rsatiladi (qizil = 10 tadan kam) —
-shu orqali qaysi bo'limlarni to'ldirish kerakligini ko'rasiz.
+* `tekshirilmagan` deb belgilangan yozuvlar (asosan Scopus kvartillari, to'lov shartlari, pedagogika va boshqa sohalardagi milliy jurnallar) namuna: scopus.com, scimagojr.com va oak.uz (https://oak.uz/pages/31738) bilan solishtirib tasdiqlang yoki «Fid / import» orqali yangilang.
+* OAK ro'yxatidagi jurnallar uchun to'lov shartlari (bepul/pullik) ma'lumotnomada yo'q — hammasi «bepul» deb qo'yilgan; jurnal saytida tekshiring.
+* Pedagogika (13.00.00, 135 ta jurnal), tibbiyot, texnika va boshqa sohalarning OAK ro'yxati hali yuklanmagan — oak.uz reyestridan CSV/JSON qilib import qiling.
+* Admin panelidagi «Qamrov» jadvali har bir yo'nalish/toifada nechta nomzod borligini ko'rsatadi (qizil = 10 tadan kam).
+* oak.uz va Scopus bilan jonli integratsiya sinab ko'rilmagan (sandbox'dan oak.uz ochilmadi); u fid formatlari orqali qurilgan va testlangan.

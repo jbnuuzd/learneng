@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS doc_templates (
   description TEXT NOT NULL DEFAULT '',
   phase TEXT NOT NULL DEFAULT 'late',           -- early | mid | late (qachon boshlash kerak)
   required INTEGER NOT NULL DEFAULT 1,
-  directions TEXT NOT NULL DEFAULT ''           -- bo'sh = hammaga; aks holda teglar
+  directions TEXT NOT NULL DEFAULT '',          -- bo'sh = hammaga; aks holda teglar
+  cancelled_from TEXT NOT NULL DEFAULT ''       -- YYYY-MM-DD: shu sanadan keyingi himoyalar uchun bekor qilingan talab
 );
 CREATE TABLE IF NOT EXISTS user_tasks (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -140,6 +141,8 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 `);
+  const cols = db.prepare('PRAGMA table_info(doc_templates)').all().map((c) => c.name);
+  if (!cols.includes('cancelled_from')) db.exec("ALTER TABLE doc_templates ADD COLUMN cancelled_from TEXT NOT NULL DEFAULT ''");
   return db;
 }
 
