@@ -10,6 +10,7 @@ import { trajectoryView } from './views/trajectory.js';
 import { lessonView } from './views/lesson.js';
 import { readingTrainerView, listeningTrainerView, speakingTrainerView } from './views/trainers.js';
 import { progressView } from './views/progress.js';
+import { mockView } from './views/mock.js';
 import { profileView } from './views/profile.js';
 import { teacherHomeView, teacherStudentView, teacherMaterialsView } from './views/teacher.js';
 
@@ -19,14 +20,14 @@ const routes = [
   [/^\/$/, S, homeView], [/^\/diagnostic$/, S, diagnosticView], [/^\/goal$/, S, goalView],
   [/^\/trajectory(?:\/(\d{4}-\d{2}-\d{2}))?$/, S, trajectoryView], [/^\/task\/(\d+)$/, S, lessonView],
   [/^\/trainer\/reading$/, S, readingTrainerView], [/^\/trainer\/listening$/, S, listeningTrainerView], [/^\/trainer\/speaking(?:\/(\d+))?$/, S, speakingTrainerView],
-  [/^\/progress$/, S, progressView], [/^\/profile$/, S, profileView],
+  [/^\/mock(?:\/(\d+))?$/, S, mockView], [/^\/progress$/, S, progressView], [/^\/profile$/, S, profileView],
   [/^\/t$/, T, teacherHomeView], [/^\/t\/student\/(\d+)(?:\/(\w+))?$/, T, teacherStudentView], [/^\/t\/materials$/, T, teacherMaterialsView], [/^\/t\/profile$/, T, profileView],
 ];
 
 const NAV_S = [
   ['/', '🏠', 'Bosh sahifa'], ['/trajectory', '🗓️', 'Traektoriya (bugungi dars)'], ['sep', 'Trenajyorlar'],
   ['/trainer/reading', '📖', 'Reading trenajyor'], ['/trainer/listening', '🎧', 'Listening trenajyor'], ['/trainer/speaking', '🎤', 'Speaking trenajyor'],
-  ['sep', 'Natijalar'], ['/progress', '📈', 'Progress va tahlil'], ['/profile', '👤', 'Profil'],
+  ['sep', 'Natijalar'], ['/mock', '📝', 'IELTS mock test'], ['/progress', '📈', 'Progress va tahlil'], ['/profile', '👤', 'Profil'],
 ];
 const NAV_T = [['/t', '👥', "O'quvchilar"], ['/t/materials', '📚', 'Materiallar va lug\'at'], ['/t/profile', '👤', 'Profil']];
 

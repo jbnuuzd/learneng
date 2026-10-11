@@ -81,3 +81,34 @@ export const speakingPool = [
 ];
 
 export const topicNames = ['education', 'environment', 'technology', 'health', 'work', 'travel', 'family', 'food', 'society', 'media', 'science', 'culture', 'crime', 'sport', 'housing', 'transport'];
+
+// ---- IELTS mock material (original wording) ----
+export const letterTasks = [
+  { level: 'B1', prompt: 'You recently stayed at a hotel and the service was disappointing. Write a letter to the manager. In your letter: describe what went wrong, explain how it affected your stay, and say what you would like the hotel to do. Write at least 150 words.' },
+  { level: 'B1', prompt: 'A friend has invited you to stay with his family abroad for two weeks. Write a letter to your friend. In your letter: thank him for the invitation, say when you can come, and ask about things you should bring. Write at least 150 words.' },
+  { level: 'B2', prompt: 'You live in a flat and your neighbours often make a lot of noise at night. Write a letter to the building manager. In your letter: explain the problem, describe how it affects you, and suggest what could be done. Write at least 150 words.' },
+  { level: 'B2', prompt: 'Your company is planning to introduce flexible working hours. Write a letter to your manager. In your letter: say whether you support the idea, explain how it would change your work, and suggest one condition. Write at least 150 words.' },
+  { level: 'C1', prompt: 'You have been asked to recommend a local place of interest to a visiting delegation. Write a formal letter to the organiser. In your letter: describe the place, explain why it suits an international audience, and advise on practical arrangements. Write at least 150 words.' },
+  { level: 'C1', prompt: 'You read a newspaper article claiming that young people no longer value education. Write a letter to the editor. In your letter: summarise the claim, give your view with reasons, and propose a constructive response. Write at least 150 words.' },
+];
+export const mockSpeaking = {
+  part1: [
+    ['Let\'s talk about your hometown. Where is it? What do you like most about it? Has it changed much since you were a child?', 'hometown'],
+    ['Let\'s talk about studying or working. What do you do? Why did you choose it? What would you like to change about it?', 'study-work'],
+    ['Let\'s talk about food. What kind of food do you enjoy? Do you cook at home? Has your diet changed in recent years?', 'food'],
+    ['Let\'s talk about free time. What do you do to relax? Do you prefer being alone or with friends? Is there a hobby you would like to try?', 'free-time'],
+  ],
+  part2: [
+    { cue: 'Describe a person who has had a strong influence on you. You should say: who the person is, how you know them, what they are like, and explain why they have influenced you.', theme: 'people' },
+    { cue: 'Describe a place you visited that you would recommend to others. You should say: where it is, when you went, what you did there, and explain why you would recommend it.', theme: 'travel' },
+    { cue: 'Describe a skill you learned that has been useful. You should say: what the skill is, how you learned it, how often you use it, and explain why it has been useful.', theme: 'skills' },
+    { cue: 'Describe a time when you helped someone. You should say: who you helped, what the problem was, what you did, and explain how you felt afterwards.', theme: 'people' },
+    { cue: 'Describe a piece of technology you use every day. You should say: what it is, how you use it, how long you have had it, and explain why it is important to you.', theme: 'technology' },
+  ],
+  part3: {
+    people: 'Why do some people become role models? Do you think teachers have more influence than parents today? How do role models differ between generations?',
+    travel: 'How has tourism changed your country? Should governments limit the number of tourists in popular places? Will people travel less in the future?',
+    skills: 'Which skills are most valuable in the modern workplace? Should schools teach practical skills more? How will technology change the way people learn?',
+    technology: 'Does technology bring people closer or push them apart? Should children have limits on screen time? How might daily life change in the next twenty years?',
+  },
+};
