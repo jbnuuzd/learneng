@@ -150,3 +150,49 @@ export function reportView(r) {
     r.vocabularySuggestions?.length ? h('div', {}, h('b', {}, "📚 Tavsiya etilgan so'zlar"), h('table', { class: 't' }, h('tbody', {}, r.vocabularySuggestions.map((v) => h('tr', {}, h('td', {}, h('b', {}, v.w)), h('td', {}, v.uz), h('td', { class: 'muted' }, v.ex)))))) : null,
     h('div', { class: 'row', style: { marginTop: '10px' } }, h('a', { class: 'btn', href: '#/trainer/speaking' }, 'Yangi suhbat')));
 }
+
+// ------------------------------------------------------------------------- pronunciation
+export async function pronunciationTrainerView() {
+  let focus = '', level = '';
+  const root = h('div', {});
+  const box = h('div', {});
+  async function load() {
+    mount(box, loading('Gaplar tayyorlanmoqda…'));
+    const d = await api.get(`/api/trainers/pronunciation?focus=${encodeURIComponent(focus)}&level=${encodeURIComponent(level)}`);
+    const focusSel = sel('pf', [['', 'Barcha tovushlar'], ...d.focuses.map((f) => [f.id, f.title])], d.focus || '');
+    const levelSel = sel('pl', [['', `Avto (${d.level})`], ...d.levels.map((l) => [l, l])], level);
+    focusSel.onchange = () => { focus = focusSel.value; load(); };
+    levelSel.onchange = () => { level = levelSel.value; load(); };
+    const tip = d.focuses.find((f) => f.id === d.focus)?.tip;
+    mount(box,
+      h('div', { class: 'card flat row' }, field('Tovush', focusSel), field('Daraja', levelSel), h('button', { class: 'btn secondary sm', onclick: load }, '↻ Boshqa gaplar')),
+      tip && h('div', { class: 'alert' }, '💡 ' + tip),
+      d.sentences.map((s, i) => sentenceCard(s, i + 1, d.ai)));
+  }
+  function sentenceCard(s, n, ai) {
+    const rec = recorderWidget({ seconds: 15 });
+    const out = h('div', {});
+    const btn = h('button', { class: 'btn', onclick: async () => {
+      const d = rec.get(); if (!d) return toast('Avval gapni o\'qib yozib oling', true);
+      btn.disabled = true; mount(out, loading('AI tinglamoqda…'));
+      try {
+        const r = await api.post('/api/trainers/pronunciation/check', { id: s.id, wav: d.base64 });
+        const cls = { good: 'ok', ok: 'warn', bad: 'bad' };
+        mount(out, h('div', { class: 'card flat' },
+          h('div', { class: 'row between' }, h('b', {}, `Natija: ${Math.round(r.score)}/100`), bar(r.score / 100, r.score >= 75 ? 'ok' : r.score >= 50 ? 'warn' : 'bad')),
+          h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px', margin: '8px 0' } }, r.words.map((w) => h('span', { class: 'badge ' + cls[w.s] }, w.w))),
+          r.transcript && h('small', { class: 'muted' }, 'AI eshitdi: ' + r.transcript),
+          r.issues.length ? h('ul', {}, r.issues.map((x) => h('li', {}, h('b', {}, x.word), x.said ? ` — «${x.said}» ` : ' ', '→ ', x.tip))) : null,
+          h('div', { class: 'fb' }, r.feedback)));
+      } catch (e) { mount(out, h('div', { class: 'alert bad' }, e.message)); }
+      btn.disabled = false;
+    } }, 'Tekshirish');
+    return h('div', { class: 'card' },
+      h('div', { class: 'row between' }, h('span', { class: 'badge' }, `${n}. ${s.level}`), audioBtn(s.audio, { label: '▶ Namuna' }), audioBtn(s.audio, { label: '🐢 Sekin', rate: 0.75 })),
+      h('p', { style: { fontSize: '1.25rem', margin: '10px 0' } }, s.text),
+      rec.el, ai ? btn : h('div', { class: 'alert warn' }, "Baholash uchun Gemini kaliti kerak. Namunani tinglab, o'zingizni yozib solishtirishingiz mumkin."), out);
+  }
+  root.append(h('div', {}, h('h1', {}, '🗣 Talaffuz mashqi'), h('p', { class: 'muted' }, "Namunani tinglang, gapni ovoz chiqarib o'qing — AI har bir so'zning talaffuzini baholaydi va nimani tuzatishni aytadi.")), box);
+  await load();
+  return root;
+}

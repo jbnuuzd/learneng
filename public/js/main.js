@@ -8,7 +8,7 @@ import { goalView } from './views/goal.js';
 import { homeView } from './views/home.js';
 import { trajectoryView } from './views/trajectory.js';
 import { lessonView } from './views/lesson.js';
-import { readingTrainerView, listeningTrainerView, speakingTrainerView } from './views/trainers.js';
+import { readingTrainerView, listeningTrainerView, speakingTrainerView, pronunciationTrainerView } from './views/trainers.js';
 import { progressView } from './views/progress.js';
 import { mockView } from './views/mock.js';
 import { profileView } from './views/profile.js';
@@ -19,14 +19,14 @@ const routes = [
   [/^\/login$/, null, loginView], [/^\/register$/, null, registerView],
   [/^\/$/, S, homeView], [/^\/diagnostic$/, S, diagnosticView], [/^\/goal$/, S, goalView],
   [/^\/trajectory(?:\/(\d{4}-\d{2}-\d{2}))?$/, S, trajectoryView], [/^\/task\/(\d+)$/, S, lessonView],
-  [/^\/trainer\/reading$/, S, readingTrainerView], [/^\/trainer\/listening$/, S, listeningTrainerView], [/^\/trainer\/speaking(?:\/(\d+))?$/, S, speakingTrainerView],
+  [/^\/trainer\/reading$/, S, readingTrainerView], [/^\/trainer\/listening$/, S, listeningTrainerView], [/^\/trainer\/pronunciation$/, S, pronunciationTrainerView], [/^\/trainer\/speaking(?:\/(\d+))?$/, S, speakingTrainerView],
   [/^\/mock(?:\/(\d+))?$/, S, mockView], [/^\/progress$/, S, progressView], [/^\/profile$/, S, profileView],
   [/^\/t$/, T, teacherHomeView], [/^\/t\/student\/(\d+)(?:\/(\w+))?$/, T, teacherStudentView], [/^\/t\/materials$/, T, teacherMaterialsView], [/^\/t\/profile$/, T, profileView],
 ];
 
 const NAV_S = [
   ['/', '🏠', 'Bosh sahifa'], ['/trajectory', '🗓️', 'Traektoriya (bugungi dars)'], ['sep', 'Trenajyorlar'],
-  ['/trainer/reading', '📖', 'Reading trenajyor'], ['/trainer/listening', '🎧', 'Listening trenajyor'], ['/trainer/speaking', '🎤', 'Speaking trenajyor'],
+  ['/trainer/reading', '📖', 'Reading trenajyor'], ['/trainer/listening', '🎧', 'Listening trenajyor'], ['/trainer/speaking', '🎤', 'Speaking trenajyor'], ['/trainer/pronunciation', '🗣', 'Talaffuz mashqi'],
   ['sep', 'Natijalar'], ['/mock', '📝', 'IELTS mock test'], ['/progress', '📈', 'Progress va tahlil'], ['/profile', '👤', 'Profil'],
 ];
 const NAV_T = [['/t', '👥', "O'quvchilar"], ['/t/materials', '📚', 'Materiallar va lug\'at'], ['/t/profile', '👤', 'Profil']];

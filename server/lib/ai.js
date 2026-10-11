@@ -232,3 +232,27 @@ Return JSON: {"prompt":"...", ${kind === 'writing' ? '"minWords":n,"maxWords":n'
     ? { level, topic, prompt: str(r.prompt, 800), words: [num(r.minWords, 30, 400, 100), num(r.maxWords, 40, 500, 160)] }
     : { level, topic, prompt: str(r.prompt, 800), seconds: num(r.seconds, 20, 180, 60) };
 }
+
+// ---------- pronunciation (one read-aloud sentence) -----------------------------------
+export async function gradePronunciation({ sentence, wav, tone, level, focus }) {
+  if (!aiEnabled() || !wav) {
+    return { ai: false, score: null, words: [], issues: [], feedback: "Talaffuzni baholash uchun sun'iy intellekt (Gemini kaliti) kerak." };
+  }
+  const r = await generateJSON(`The audio is an Uzbek-speaking learner (level ${level || 'unknown'}) reading this sentence aloud:
+"${sentence}"
+${focus ? `Sounds being practised: ${focus}.` : ''}
+Judge ONLY pronunciation (individual sounds, word stress, rhythm/intonation) — not grammar. Be fair: a non-native accent is fine if it is easy to understand.
+Return JSON: {"transcript":"what you actually heard","score":0..100,
+"words":[{"w":"each word of the target sentence in order","s":"good"|"ok"|"bad"}],
+"issues":[{"word":"...","said":"how it sounded (approximate, e.g. 'wery')","tip":"short Uzbek tip how to produce it correctly"}] (max 4, only real problems),
+"feedback":"3-5 sentences in the required tone"}
+If the audio is silent or not English, give score 0 and say so.`, { system: SYS(tone, level), audio: { mime: 'audio/wav', data: wav }, temperature: 0.2, timeout: 60000, fast: true });
+  const target = sentence.split(/\s+/);
+  const given = Array.isArray(r.words) ? r.words : [];
+  const words = target.map((w, i) => ({ w, s: ['good', 'ok', 'bad'].includes(given[i]?.s) ? given[i].s : 'ok' }));
+  return {
+    ai: true, score: num(r.score, 0, 100, 50), transcript: str(r.transcript, 400), words,
+    issues: (Array.isArray(r.issues) ? r.issues : []).slice(0, 4).map((x) => ({ word: str(x.word, 40), said: str(x.said, 60), tip: str(x.tip, 250) })),
+    feedback: str(r.feedback, 1200),
+  };
+}

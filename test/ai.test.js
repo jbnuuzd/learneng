@@ -21,6 +21,7 @@ function reply(body) {
     return { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'audio/L16;codec=pcm;rate=24000', data: pcm.toString('base64') } }] } }] };
   }
   if (text.includes('Assess this English writing')) return json({ cefr: 'B2', band: 6.5, score: 78, criteria: { task: 6, coherence: 6.5, lexical: 6, grammar: 6.5 }, strengths: ['Yaxshi tuzilma'], weaknesses: ['Artikllar'], corrections: [{ original: 'a informations', corrected: 'some information', why: 'sanalmaydigan ot' }], usedFocus: true, feedback: 'WRITING-FEEDBACK ' + sys.slice(sys.indexOf('TONE'), sys.indexOf('TONE') + 14) });
+  if (text.includes('reading this sentence aloud')) return json({ transcript: 'I sink this is my third birthday', score: 62, words: [{ w: 'I', s: 'good' }, { w: 'think', s: 'bad' }], issues: [{ word: 'think', said: 'sink', tip: 'Tilni tishlar orasiga qo\'ying' }], feedback: 'PRON-FEEDBACK ' + sys.slice(sys.indexOf('TONE'), sys.indexOf('TONE') + 14) });
   if (text.includes('audio contains a learner')) return json({ transcript: 'I live in Tashkent.', cefr: 'B1', band: 5.5, score: 65, criteria: { fluency: 5.5, lexical: 5, grammar: 5.5, pronunciation: 5.5 }, strengths: ['Ravon'], weaknesses: ['Lug\'at'], corrections: [], pronunciation_tips: ['th tovushi'], usedFocus: null, feedback: 'SPEAKING-FEEDBACK' });
   if (text.includes('Grade each item')) return json({ items: [{ score: 1, comment: 'ok', correction: 'x' }, { score: 0.4, comment: 'xato', correction: 'y' }, { score: 1, comment: 'ok', correction: 'z' }, { score: 1, comment: 'ok', correction: 'w' }, { score: 1, comment: 'ok', correction: 'w' }, { score: 1, comment: 'ok', correction: 'w' }, { score: 1, comment: 'ok', correction: 'w' }, { score: 1, comment: 'ok', correction: 'w' }], feedback: 'SENTENCES-FEEDBACK' });
   if (text.includes("learner's answer")) return json({ ok: [true, true, true, true, true, true, true, true, true, true] });
@@ -189,4 +190,20 @@ test('analysis uses Gemini narrative, cached per day', async () => {
   await student.get('/api/analysis');
   assert.equal(seen.filter((s) => s.body.contents[0].parts[0].text.includes('study-planning advisor')).length, n, 'cached');
   assert.ok(r.data.chance <= 90, 'probability is capped');
+});
+
+test('pronunciation trainer: sentences by sound, Gemini scores a recording, ids only', async () => {
+  let r = await student.get('/api/trainers/pronunciation?focus=th');
+  assert.equal(r.status, 200); assert.equal(r.data.focus, 'th');
+  assert.ok(r.data.sentences.length >= 3 && r.data.sentences.every((s) => s.focus === 'th' && /^[0-9a-f]{32}$/.test(s.audio)));
+  const s = r.data.sentences[0];
+  r = await student.post('/api/trainers/pronunciation/check', { id: s.id, wav: Buffer.from('RIFFxxxxWAVE').toString('base64') });
+  assert.equal(r.status, 200); assert.equal(r.data.ai, true); assert.equal(r.data.score, 62);
+  assert.equal(r.data.words.length, s.text.split(/\s+/).length, 'one verdict per target word');
+  assert.equal(r.data.words[1].s, 'bad'); assert.equal(r.data.words[2].s, 'ok', 'missing verdicts default to ok');
+  assert.match(r.data.feedback, /TONE = POSITIV/); assert.equal(r.data.issues[0].word, 'think');
+  const call = seen.filter((x) => x.body.contents[0].parts[0].text.includes('reading this sentence aloud')).at(-1);
+  assert.ok(call.body.contents[0].parts[0].text.includes(s.text)); assert.equal(call.body.contents[0].parts[1].inlineData.mimeType, 'audio/wav');
+  assert.equal((await student.post('/api/trainers/pronunciation/check', { id: 9999, wav: 'AAAA' })).status, 400);
+  assert.equal((await student.post('/api/trainers/pronunciation/check', { id: s.id })).status, 400);
 });

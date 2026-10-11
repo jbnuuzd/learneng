@@ -80,6 +80,8 @@ BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq,
 
 **Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
 
+**Yangi (3):** 🗣 talaffuz mashqi (gapni o'qing → AI har so'zni baholaydi, xatolarni tuzatish bo'yicha maslahat beradi; 8 xil qiyin tovush guruhi).
+
 **Yangi (2):** 📲 o'rnatiladigan ilova (PWA: telefonda «Bosh ekranga qo'shish», oflayn ochiladi), 💬 o'qituvchidan o'quvchiga xabar (o'quvchi bosh sahifasida ko'radi), 🔑 API kalitlarni o'qituvchi panelidan qo'shish.
 
 **O'qituvchi:** o'quvchilar ro'yxati va ogohlantirishlar, parolni tiklash, CSV eksport, fikr-mulohaza uslubi (pozitiv/neytral/qat'iy — standart yoki aniq kun uchun),

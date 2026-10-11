@@ -1,7 +1,8 @@
 import { q, j, unj } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
-import { aiEnabled, aiState } from '../lib/gemini.js';
-import { generateReading, generateListening, objectiveFeedback } from '../lib/ai.js';
+import { aiEnabled, aiState, registerTts, aiErrorText } from '../lib/gemini.js';
+import { generateReading, generateListening, objectiveFeedback, gradePronunciation } from '../lib/ai.js';
+import { PRON_FOCUS, PRON_SENTENCES } from '../content/pronunciation.js';
 import { pickReading, pickListening, topicCatalog } from '../lib/content.js';
 import { topicNames } from '../content/pools.js';
 import { personas, speakingModes } from '../content/personas.js';
@@ -38,6 +39,31 @@ export function registerTrainers(r) {
     personas: personas.map(({ id, name, emoji, title, desc }) => ({ id, name, emoji, title, desc })),
     modes: speakingModes, resources: RESOURCES,
   }), { role: 'student' });
+
+  // Pronunciation: read a sentence aloud, Gemini listens and scores the sounds (clients send ids, never arbitrary text).
+  r.get('/api/trainers/pronunciation', async ({ user, query }) => {
+    const level = LEVELS.includes(String(query.level || '').toUpperCase()) ? String(query.level).toUpperCase() : await achievedCefr(user.id);
+    const li = LEVELS.indexOf(level);
+    const focus = PRON_FOCUS.some((f) => f.id === query.focus) ? query.focus : null;
+    let pool = PRON_SENTENCES.map((s, id) => ({ ...s, id })).filter((s) => (!focus || s.f === focus));
+    const near = pool.filter((s) => Math.abs(LEVELS.indexOf(s.l) - li) <= 1);
+    if (near.length >= 3) pool = near;
+    const sentences = shuffle(pool).slice(0, 5).map((s) => ({ id: s.id, text: s.t, focus: s.f, level: s.l, audio: registerTts(s.t, { voice: 'Kore', style: 'Say slowly and clearly' }) }));
+    return { level, levels: LEVELS, focuses: PRON_FOCUS, focus, ai: aiEnabled(), sentences };
+  }, { role: 'student' });
+
+  r.post('/api/trainers/pronunciation/check', async ({ user, body, date }) => {
+    const s = PRON_SENTENCES[Number(body.id)];
+    if (!s) throw bad('Gap topilmadi');
+    const wav = typeof body.wav === 'string' ? body.wav : null;
+    if (!wav || wav.length > 4 * 1024 * 1024) throw bad('Audio yo\'q yoki juda katta');
+    if (!aiEnabled()) throw new HttpError(503, "Talaffuzni baholash uchun Gemini kaliti kerak");
+    rateLimit(user.id, 'ai', 40);
+    const tone = await effectiveTone(user.id, date);
+    const focus = PRON_FOCUS.find((f) => f.id === s.f)?.title;
+    try { return await gradePronunciation({ sentence: s.t, wav, tone, level: await achievedCefr(user.id), focus }); }
+    catch (e) { throw new HttpError(502, `AI hozir javob bera olmadi: ${aiErrorText(e)}`); }
+  }, { role: 'student', limit: 6 * 1024 * 1024 });
 
   r.post('/api/trainers/reading/new', async ({ user, body }) => {
     const level = await levelOf(body, user.id), topic = topicOf(body);
