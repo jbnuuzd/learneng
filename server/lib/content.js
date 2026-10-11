@@ -48,6 +48,13 @@ const mergeUnique = (...lists) => {
 };
 export const topicPoolFrom = (cache, topicId) => mergeUnique(seedTopics.find((t) => t.id === topicId)?.words || [], cache.get('vocab:' + topicId) || []);
 export const generalPoolFrom = (cache, level) => mergeUnique(seedGeneral[level] || [], cache.get('vocab:general:' + level) || []);
+// lowercase word -> entry, over seed + generated lists (used to resolve review words)
+export function buildWordIndex(cache) {
+  const m = new Map();
+  for (const t of topicCatalog) for (const w of topicPoolFrom(cache, t.id)) if (!m.has(w.w.toLowerCase())) m.set(w.w.toLowerCase(), w);
+  for (const lv of ['A1', 'A2', 'B1', 'B2', 'C1']) for (const w of generalPoolFrom(cache, lv)) if (!m.has(w.w.toLowerCase())) m.set(w.w.toLowerCase(), w);
+  return m;
+}
 export const topicWordPool = async (topicId) => topicPoolFrom(await loadVocabCache(), topicId);
 export const generalWordPool = async (level) => generalPoolFrom(await loadVocabCache(), level);
 export async function growTopic(topicId, extra = 40) {

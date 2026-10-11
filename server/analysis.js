@@ -35,6 +35,9 @@ export async function analyseGoal(userId, today) {
   const futureHours = (fut.m || 0) / 60;
   const futureEffective = futureHours * adherence;
   const learnedWords = (await q.get('SELECT COUNT(*) n FROM learned_words WHERE user_id=?', userId)).n;
+  const rr = await q.get('SELECT COALESCE(SUM(right_n),0) r, COALESCE(SUM(wrong_n),0) w FROM learned_words WHERE user_id=?', userId);
+  const retentionMeasured = rr.r + rr.w >= 60;                 // after enough review answers use the learner's real recall rate
+  const retention = retentionMeasured ? clamp(rr.r / (rr.r + rr.w), 0.4, 0.9) : RETENTION;
   const futureNewWords = (await q.get("SELECT COUNT(*) n FROM tasks WHERE user_id=? AND type='vocab' AND date>=? AND status!='done'", userId, today)).n * NEW_WORDS_PER_DAY;
 
   // hours model
@@ -46,7 +49,7 @@ export async function analyseGoal(userId, today) {
   // vocabulary model
   const vocabNow = vocabForAbility(cur);
   const vocabTarget = vocabForAbility(target);
-  const vocabProjected = vocabNow + futureNewWords * RETENTION;
+  const vocabProjected = vocabNow + futureNewWords * retention;
   const vocabCoverage = clamp((vocabProjected - vocabNow) / Math.max(vocabTarget - vocabNow, 1), 0, 1.5);
   const vocabLimitedAbility = inverse(VOCAB_PTS, vocabProjected);
 
@@ -83,7 +86,7 @@ export async function analyseGoal(userId, today) {
     ready: true, today, daysTotal, daysLeft, target: { cefr: goal.target_cefr, ielts: goal.target_ielts }, current: describe(cur),
     predicted: describe(predicted), chance, verdict, adherence: Math.round(adherence * 100),
     hours: { required: Math.round(requiredHours), futurePlanned: Math.round(futureHours), futureEffective: Math.round(futureEffective), perDay: hoursPerDay, neededPerDay: neededHoursPerDay, shortfall: Math.round(shortfallHours), extraDaysNeeded },
-    vocabulary: { newWordsPerDay: NEW_WORDS_PER_DAY, meetsDailyTarget: NEW_WORDS_PER_DAY >= 50, learnedSoFar: learnedWords, plannedNew: futureNewWords, retention: RETENTION, now: vocabNow, projected: Math.round(vocabProjected), target: vocabTarget, coverage: Math.round(vocabCoverage * 100) },
+    vocabulary: { newWordsPerDay: NEW_WORDS_PER_DAY, meetsDailyTarget: NEW_WORDS_PER_DAY >= 50, learnedSoFar: learnedWords, plannedNew: futureNewWords, retention: Math.round(retention * 100) / 100, retentionMeasured, now: vocabNow, projected: Math.round(vocabProjected), target: vocabTarget, coverage: Math.round(vocabCoverage * 100) },
     grammar: { unitsNeeded: neededUnits.length, unitsCovered: Math.round(grammarCoverage * neededUnits.length), coverage: Math.round(grammarCoverage * 100), contentCeiling: levelIndex(goal.target_cefr) > 4 ? 'C1' : null },
     skills,
     suggestedDeadline: extraDaysNeeded ? addDays(goal.deadline, extraDaysNeeded) : null,

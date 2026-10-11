@@ -40,7 +40,7 @@ export const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} soat${m % 60 ? ' 
 export const pct = (x) => Math.round((x ?? 0) * 100);
 export const addDaysStr = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-export const TYPE_ICON = { grammar: '📘', vocab: '🔤', reading: '📖', listening: '🎧', speaking: '🎤', writing: '✍️', custom: '📌' };
+export const TYPE_ICON = { srs: '🔁', grammar: '📘', vocab: '🔤', reading: '📖', listening: '🎧', speaking: '🎤', writing: '✍️', custom: '📌' };
 export const TONE_LABEL = { positive: "Rag'batlantiruvchi", neutral: 'Neytral', negative: "Qat'iy" };
 export const toneBadge = (t) => h('span', { class: 'badge ' + (t === 'positive' ? 'ok' : t === 'negative' ? 'bad' : 'info') }, { positive: '😊 Pozitiv', neutral: '😐 Neytral', negative: '🧐 Qat\'iy' }[t] || t);
 

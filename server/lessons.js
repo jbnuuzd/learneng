@@ -4,13 +4,14 @@ import { aiEnabled, registerTts } from './lib/gemini.js';
 import { shuffle } from './lib/rng.js';
 import { LEVEL_DIFF } from './lib/scale.js';
 import {
-  unitById, topicById, loadVocabCache, topicPoolFrom, generalPoolFrom, growTopic, growGeneral, topicCatalog,
+  unitById, topicById, loadVocabCache, buildWordIndex, topicPoolFrom, generalPoolFrom, growTopic, growGeneral, topicCatalog,
   readingFor, listeningFor, promptFor, cacheGet, cacheSet,
 } from './lib/content.js';
 import { levelIndex } from './lib/scale.js';
+import { dueWords } from './lib/srs.js';
 
 export const SKILL_OF = { grammar: 'grammar', vocab: 'vocab', reading: 'reading', listening: 'listening', speaking: 'speaking', writing: 'writing', custom: null };
-export const TYPE_UZ = { grammar: 'Grammatika', vocab: "Lug'at", reading: 'Reading', listening: 'Listening', speaking: 'Speaking', writing: 'Writing', custom: "Qo'shimcha topshiriq" };
+export const TYPE_UZ = { srs: "So'z takrorlash", grammar: 'Grammatika', vocab: "Lug'at", reading: 'Reading', listening: 'Listening', speaking: 'Speaking', writing: 'Writing', custom: "Qo'shimcha topshiriq" };
 const dOf = (lvl) => LEVEL_DIFF[lvl] ?? 45;
 
 // ---- stage helpers ---------------------------------------------------------
@@ -199,10 +200,14 @@ async function vocabStages(task, sel) {
     const opts = shuffle([w, ...others], `${seed}:o${i}`);
     return { q: `"${w.w}" (${w.pos}) — ma'nosi qaysi?`, o: opts.map((x) => x.uz), a: opts.indexOf(w) };
   });
-  out.push(choiceStage('vquiz', "Test: so'z ma'nolari", Math.ceil(quizItems.length * 0.25), quizItems, { ...base, instructions: "To'g'ri javobni tanlang." }));
+  const quizStage = choiceStage('vquiz', "Test: so'z ma'nolari", Math.ceil(quizItems.length * 0.25), quizItems, { ...base, instructions: "To'g'ri javobni tanlang." });
+  quizStage.srsWords = quizWords.map((w) => w.w.toLowerCase()); quizStage.srsFirst = true;
+  out.push(quizStage);
   const recallWords = shuffle(all, seed + 'r').slice(0, 15);
-  out.push(textStage('vrecall', "Esga tushiring: inglizchasini yozing", Math.ceil(recallWords.length * 0.4), 'recall',
-    recallWords.map((w) => ({ q: `${w.uz}  (${w.pos})`, hint: `${w.w[0]}${'_'.repeat(Math.max(0, w.w.length - 1))}`, a: [w.w] })), { ...base, instructions: "O'zbekcha ma'noga mos inglizcha so'zni yozing. Birinchi harf berilgan." }));
+  const recallStage = textStage('vrecall', "Esga tushiring: inglizchasini yozing", Math.ceil(recallWords.length * 0.4), 'recall',
+    recallWords.map((w) => ({ q: `${w.uz}  (${w.pos})`, hint: `${w.w[0]}${'_'.repeat(Math.max(0, w.w.length - 1))}`, a: [w.w] })), { ...base, instructions: "O'zbekcha ma'noga mos inglizcha so'zni yozing. Birinchi harf berilgan." });
+  recallStage.srsWords = recallWords.map((w) => w.w.toLowerCase()); recallStage.srsFirst = true;
+  out.push(recallStage);
   const dict = shuffle(all.filter((w) => !w.w.includes(' ')), seed + 'd').slice(0, 6);
   if (dict.length >= 3) out.push(textStage('vdict', "Diktant: so'zni eshitib yozing", Math.ceil(dict.length * 0.3), 'dictation', dict.map((w) => ({ audio: sentenceAudio(w.w), a: [w.w] })), { ...base, skill: 'listening', instructions: "So'zni tinglang va to'g'ri imlo bilan yozing." }));
   const mk = shuffle(all, seed + 'm').slice(0, 8).map((w) => w.w);
@@ -281,6 +286,34 @@ function customStages(task) {
     pub: { type: 'confirm', instructions: "Topshiriqni bajarib bo'lgach, qisqacha hisobot yozing va tasdiqlang.", info } }];
 }
 
+async function srsStages(task) {
+  const key = `task:${task.id}:srs`;
+  let list = await cacheGet(key);
+  if (!list) {
+    list = (await dueWords(task.user_id, task.date, 30)).map((r) => r.word);
+    await cacheSet(key, 'srs-task', list);
+  }
+  const index = buildWordIndex(await loadVocabCache());
+  const words = list.map((w) => index.get(w)).filter(Boolean);
+  const base = { skill: 'vocab', level: 'B1', topic: 'srs' };
+  if (words.length < 2) return [];
+  const pool = [...index.values()];
+  const seed = `srs${task.id}`;
+  const quizWords = shuffle(words, seed + 'q').slice(0, 20);
+  const quizItems = quizWords.map((w, i) => {
+    const others = shuffle(pool.filter((x) => x.w !== w.w), `${seed}:d${i}`).slice(0, 3);
+    const opts = shuffle([w, ...others], `${seed}:o${i}`);
+    return i % 2 === 0 ? { q: `"${w.uz}" — inglizchasi qaysi?`, o: opts.map((x) => x.w), a: opts.indexOf(w) } : { q: `"${w.w}" (${w.pos}) — ma'nosi qaysi?`, o: opts.map((x) => x.uz), a: opts.indexOf(w) };
+  });
+  const quiz = choiceStage('srs-quiz', "Takrorlash testi", Math.max(3, Math.ceil(quizItems.length * 0.25)), quizItems, { ...base, instructions: "Avval o'rgangan so'zlaringizni eslang. To'g'ri javob so'zni keyingi takrorlashga uzoqroq muddatga suradi." });
+  quiz.srsWords = quizWords.map((w) => w.w.toLowerCase());
+  const recallWords = shuffle(words, seed + 'r').slice(0, 12);
+  const recall = textStage('srs-recall', 'Esga tushiring: inglizchasini yozing', Math.max(3, Math.ceil(recallWords.length * 0.4)), 'recall',
+    recallWords.map((w) => ({ q: `${w.uz}  (${w.pos})`, hint: `${w.w[0]}${'_'.repeat(Math.max(0, w.w.length - 1))}`, a: [w.w] })), { ...base, instructions: "O'zbekcha ma'noga mos inglizcha so'zni yozing. Birinchi harf berilgan." });
+  recall.srsWords = recallWords.map((w) => w.w.toLowerCase());
+  return [quiz, recall];
+}
+
 // ---- public API ---------------------------------------------------------------------
 export function hydrate(row) {
   return { ...row, ref: unj(row.ref_json, {}) };
@@ -290,6 +323,7 @@ export function describeTask(task) {
   const r = task.ref || {};
   switch (task.type) {
     case 'grammar': { const u = unitById[r.unit]; return { title: u ? u.title : 'Grammatika', subtitle: r.mode === 'review' ? 'Takrorlash' : 'Yangi mavzu', level: u?.level }; }
+    case 'srs': return { title: "So'z takrorlash", subtitle: `${r.count ?? ''} ta so'z — intervalli takrorlash`.trim(), level: 'B1' };
     case 'vocab': return { title: `${topicById[r.topic]?.title || r.topic} — so'zlar`, subtitle: `${(r.nTopic ?? 40) + (r.nGeneral ?? 12)} ta so'z (${r.nTopic ?? 40} mavzu + ${r.nGeneral ?? 12} kundalik)`, level: r.level };
     case 'reading': return { title: 'Reading', subtitle: `${r.level}${r.topic ? ' · ' + r.topic : ''}`, level: r.level };
     case 'listening': return { title: 'Listening', subtitle: `${r.level}${r.topic ? ' · ' + r.topic : ''}`, level: r.level };
@@ -311,6 +345,7 @@ export async function buildLesson(taskRow) {
       break;
     }
     case 'vocab': stages = await vocabStages(task, await vocabSelection(task)); break;
+    case 'srs': stages = await srsStages(task); break;
     case 'reading': stages = await readingStages(task); break;
     case 'listening': stages = await listeningStages(task); break;
     case 'speaking': stages = await speakingStages(task); break;

@@ -8,6 +8,8 @@ import { evidenceFromScore, LEVEL_DIFF, describe } from './scale.js';
 import { applyEvidence, effectiveTone } from './progress.js';
 import { buildLesson } from '../lessons.js';
 import { rateLimit } from './auth.js';
+import { recordResults } from './srs.js';
+import { addDays } from './dates.js';
 
 const REVIEW_MODES = new Set(['gap', 'error', 'transform', 'reorder']);
 
@@ -92,10 +94,11 @@ export async function submitStage({ user, taskRow, stageKey, body, date }) {
   }
   // Vocabulary bookkeeping
   if (stage.words && stageKey.startsWith('flash')) {
-    await q.run("INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on) SELECT ?, json_extract(value,'$.w'), json_extract(value,'$.t'), ? FROM json_each(?)", user.id, date, j(stage.words.map((w) => ({ w: w.w.toLowerCase(), t: w.topic || null }))));
+    await q.run("INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on,box,due) SELECT ?, json_extract(value,'$.w'), json_extract(value,'$.t'), ?, 0, ? FROM json_each(?)", user.id, date, addDays(date, 1), j(stage.words.map((w) => ({ w: w.w.toLowerCase(), t: w.topic || null }))));
   }
-  if (stage.skill === 'vocab' && result.items?.length && stage.grade !== 'sentences') {
-    // not tracked per word for quizzes with generated distractors; keep it simple
+  // Spaced repetition: per-word results of the first attempt of a quiz / recall stage
+  if (prev === 0 && stage.srsWords && result.items?.length) {
+    await recordResults(user.id, result.items.map((it, i) => ({ word: stage.srsWords[i], ok: !!it.ok })).filter((r) => r.word), date, { firstExposure: !!stage.srsFirst });
   }
 
   // Task status

@@ -6,6 +6,7 @@ import { toCefr, toIelts, ieltsToAbility, cefrToAbility, describe, LEVELS, goalA
 import { previewGoal, generatePlan, activePlan, weakTopics, NEW_WORDS_PER_DAY, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
 import { analyseGoal } from '../analysis.js';
+import { ensureSrsTask, srsStats } from '../lib/srs.js';
 import { unitById } from '../lib/content.js';
 
 export function resolveTarget(body) {
@@ -60,7 +61,7 @@ export async function progressFor(userId, today) {
   return {
     overall: o == null ? null : describe(o),
     skills: SKILLS.map((s) => ({ skill: s, name: SKILL_UZ[s], ...(ab[s] != null ? describe(ab[s]) : { ability: null }) })),
-    history: await history(userId), stats: await statsFor(userId, today), weakTopics: (await weakTopics(userId)).map((id) => ({ id, title: unitById[id]?.title || id })), recent,
+    srs: await srsStats(userId, today), history: await history(userId), stats: await statsFor(userId, today), weakTopics: (await weakTopics(userId)).map((id) => ({ id, title: unitById[id]?.title || id })), recent,
   };
 }
 
@@ -91,11 +92,13 @@ export function registerPlan(r) {
   r.get('/api/plan', async ({ user, date }) => {
     const goal = await q.get('SELECT * FROM goals WHERE user_id=?', user.id);
     const plan = await activePlan(user.id);
+    if (plan) await ensureSrsTask(user.id, date);
     return { goal, plan: plan && { id: plan.id, ...plan.meta }, today: date, stats: await statsFor(user.id, date), todayView: plan ? await dayView(user.id, date) : null };
   }, { role: 'student' });
 
   r.get('/api/plan/day', async ({ user, query, date }) => {
     const d = isDate(query.date) ? query.date : date;
+    if (d === date) await ensureSrsTask(user.id, d);
     return dayView(user.id, d);
   }, { role: 'student' });
 
