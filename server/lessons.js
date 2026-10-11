@@ -4,7 +4,7 @@ import { aiEnabled, registerTts } from './lib/gemini.js';
 import { shuffle } from './lib/rng.js';
 import { LEVEL_DIFF } from './lib/scale.js';
 import {
-  unitById, topicById, topicWordPool, generalWordPool, growTopic, growGeneral, topicCatalog,
+  unitById, topicById, loadVocabCache, topicPoolFrom, generalPoolFrom, growTopic, growGeneral, topicCatalog,
   readingFor, listeningFor, promptFor, cacheGet, cacheSet,
 } from './lib/content.js';
 import { levelIndex } from './lib/scale.js';
@@ -128,31 +128,32 @@ function grammarStages(task, unit, mode) {
 // ---- vocabulary ----------------------------------------------------------------------
 export async function vocabSelection(task) {
   const key = `task:${task.id}:words`;
-  const cached = cacheGet(key);
+  const cached = await cacheGet(key);
   if (cached) return cached;
   const ref = task.ref;
   const nTopic = ref.nTopic ?? 40, nGeneral = ref.nGeneral ?? 12;
-  const learned = new Set(q.all('SELECT word FROM learned_words WHERE user_id=?', task.user_id).map((r) => r.word));
+  const learned = new Set((await q.all('SELECT word FROM learned_words WHERE user_id=?', task.user_id)).map((r) => r.word));
   const fresh = (pool) => pool.filter((w) => !learned.has(w.w.toLowerCase()));
   const used = new Set();
   const take = (pool, n) => { const out = []; for (const w of pool) { const k = w.w.toLowerCase(); if (out.length >= n) break; if (!learned.has(k) && !used.has(k)) { used.add(k); out.push(w); } } return out; };
 
-  let topicPool = topicWordPool(ref.topic);
-  if (fresh(topicPool).length < nTopic && aiEnabled()) { try { await growTopic(ref.topic, 40); topicPool = topicWordPool(ref.topic); } catch { /* ignore */ } }
+  let cache = await loadVocabCache();
+  let topicPool = topicPoolFrom(cache, ref.topic);
+  if (fresh(topicPool).length < nTopic && aiEnabled()) { try { await growTopic(ref.topic, 40); cache = await loadVocabCache(); topicPool = topicPoolFrom(cache, ref.topic); } catch { /* ignore */ } }
   let topicWords = take(topicPool, nTopic);
   let borrowed = false;
   if (topicWords.length < nTopic) { // top up from the nearest other topics
     const li = levelIndex(ref.level);
     const others = topicCatalog.filter((t) => t.id !== ref.topic).sort((a, b) => Math.abs(levelIndex(a.level) - li) - Math.abs(levelIndex(b.level) - li));
-    for (const t of others) { if (topicWords.length >= nTopic) break; topicWords = topicWords.concat(take(topicWordPool(t.id), nTopic - topicWords.length)); borrowed = true; }
+    for (const t of others) { if (topicWords.length >= nTopic) break; topicWords = topicWords.concat(take(topicPoolFrom(cache, t.id), nTopic - topicWords.length)); borrowed = true; }
   }
-  let genPool = generalWordPool(ref.level);
-  if (fresh(genPool).length < nGeneral && aiEnabled()) { try { await growGeneral(ref.level, 40); genPool = generalWordPool(ref.level); } catch { /* ignore */ } }
+  let genPool = generalPoolFrom(cache, ref.level);
+  if (fresh(genPool).length < nGeneral && aiEnabled()) { try { await growGeneral(ref.level, 40); cache = await loadVocabCache(); genPool = generalPoolFrom(cache, ref.level); } catch { /* ignore */ } }
   let generalWords = take(genPool, nGeneral);
   if (generalWords.length < nGeneral) { // neighbouring levels
     for (const lv of ['A1', 'A2', 'B1', 'B2', 'C1'].sort((a, b) => Math.abs(levelIndex(a) - levelIndex(ref.level)) - Math.abs(levelIndex(b) - levelIndex(ref.level)))) {
       if (generalWords.length >= nGeneral) break;
-      generalWords = generalWords.concat(take(generalPoolSafe(lv), nGeneral - generalWords.length));
+      generalWords = generalWords.concat(take(generalPoolFrom(cache, lv), nGeneral - generalWords.length));
     }
   }
   // Not enough unseen words (offline content exhausted): fill with the weakest already-learned words as review.
@@ -160,17 +161,16 @@ export async function vocabSelection(task) {
   let reviewWords = [];
   const newCount = topicWords.length + generalWords.length;
   if (newCount < target) {
-    const rows = q.all('SELECT word, topic FROM learned_words WHERE user_id=? ORDER BY (right_n - wrong_n), learned_on LIMIT ?', task.user_id, target - newCount);
+    const rows = await q.all('SELECT word, topic FROM learned_words WHERE user_id=? ORDER BY (right_n - wrong_n), learned_on LIMIT ?', task.user_id, target - newCount);
     const all = new Map();
-    for (const t of topicCatalog) for (const w of topicWordPool(t.id)) all.set(w.w.toLowerCase(), w);
-    for (const lv of ['A1', 'A2', 'B1', 'B2', 'C1']) for (const w of generalPoolSafe(lv)) all.set(w.w.toLowerCase(), w);
+    for (const t of topicCatalog) for (const w of topicPoolFrom(cache, t.id)) all.set(w.w.toLowerCase(), w);
+    for (const lv of ['A1', 'A2', 'B1', 'B2', 'C1']) for (const w of generalPoolFrom(cache, lv)) all.set(w.w.toLowerCase(), w);
     reviewWords = rows.map((r) => all.get(r.word)).filter(Boolean);
   }
   const sel = { topic: ref.topic, topicWords, generalWords, reviewWords, newCount, borrowed, target };
-  cacheSet(key, 'vocab-task', sel);
+  await cacheSet(key, 'vocab-task', sel);
   return sel;
 }
-const generalPoolSafe = (lv) => generalWordPool(lv);
 
 function flashStage(key, title, words, base, minutes) {
   return { key, title, minutes, ...base, grade: 'none', words,
@@ -178,7 +178,7 @@ function flashStage(key, title, words, base, minutes) {
       words: words.map((w) => ({ w: w.w, pos: w.pos, uz: w.uz, ex: w.ex, audio: sentenceAudio(w.w), exAudio: sentenceAudio(w.ex) })) } };
 }
 
-function vocabStages(task, sel) {
+async function vocabStages(task, sel) {
   const base = { skill: 'vocab', level: task.ref.level, topic: task.ref.topic };
   const seed = `v${task.id}`;
   const all = [...sel.topicWords, ...sel.generalWords, ...sel.reviewWords];
@@ -188,7 +188,7 @@ function vocabStages(task, sel) {
   if (sel.generalWords.length) out.push(flashStage('flash-general', `Kundalik so'zlar (${sel.generalWords.length} ta)`, sel.generalWords, base, Math.ceil(sel.generalWords.length * 0.45)));
   if (sel.reviewWords.length) out.push(flashStage('flash-review', `Takrorlash so'zlari (${sel.reviewWords.length} ta)`, sel.reviewWords, base, Math.ceil(sel.reviewWords.length * 0.3)));
   if (all.length < 4) return out;
-  const poolForDistractors = [...new Map([...all, ...topicWordPool(sel.topic)].map((w) => [w.w.toLowerCase(), w])).values()];
+  const poolForDistractors = [...new Map([...all, ...topicPoolFrom(await loadVocabCache(), sel.topic)].map((w) => [w.w.toLowerCase(), w])).values()];
   const quizWords = shuffle(all, seed + 'q').slice(0, 25);
   const quizItems = quizWords.map((w, i) => {
     const others = shuffle(poolForDistractors.filter((x) => x.w !== w.w), `${seed}:d${i}`).slice(0, 3);
@@ -310,7 +310,7 @@ export async function buildLesson(taskRow) {
       stages = grammarStages(task, u, task.ref.mode || 'new');
       break;
     }
-    case 'vocab': stages = vocabStages(task, await vocabSelection(task)); break;
+    case 'vocab': stages = await vocabStages(task, await vocabSelection(task)); break;
     case 'reading': stages = await readingStages(task); break;
     case 'listening': stages = await listeningStages(task); break;
     case 'speaking': stages = await speakingStages(task); break;

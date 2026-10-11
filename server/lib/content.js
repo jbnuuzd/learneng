@@ -31,39 +31,40 @@ export const topicCatalog = [
 ];
 export const topicById = Object.fromEntries(topicCatalog.map((t) => [t.id, t]));
 
-const getCached = (key) => unj(q.get('SELECT json FROM generated_content WHERE key=?', key)?.json);
-const setCached = (key, kind, val) =>
+const getCached = async (key) => unj((await q.get('SELECT json FROM generated_content WHERE key=?', key))?.json);
+const setCached = async (key, kind, val) =>
   q.run('INSERT INTO generated_content(key,kind,json) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json', key, kind, j(val));
 
 // ---------- vocabulary ------------------------------------------------------
-export function topicWordPool(topicId) {
-  const seed = seedTopics.find((t) => t.id === topicId)?.words || [];
-  const gen = getCached('vocab:' + topicId) || [];
-  const seen = new Set(), out = [];
-  for (const w of [...seed, ...gen]) { const k = w.w.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(w); } }
-  return out;
+// One query loads every cached word list (topics + general levels); the *From helpers are pure.
+export async function loadVocabCache() {
+  const rows = await q.all("SELECT key, json FROM generated_content WHERE key LIKE 'vocab:%'");
+  return new Map(rows.map((r) => [r.key, unj(r.json, [])]));
 }
-export function generalWordPool(level) {
-  const gen = getCached('vocab:general:' + level) || [];
+const mergeUnique = (...lists) => {
   const seen = new Set(), out = [];
-  for (const w of [...(seedGeneral[level] || []), ...gen]) { const k = w.w.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(w); } }
+  for (const w of lists.flat()) { const k = w.w.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(w); } }
   return out;
-}
+};
+export const topicPoolFrom = (cache, topicId) => mergeUnique(seedTopics.find((t) => t.id === topicId)?.words || [], cache.get('vocab:' + topicId) || []);
+export const generalPoolFrom = (cache, level) => mergeUnique(seedGeneral[level] || [], cache.get('vocab:general:' + level) || []);
+export const topicWordPool = async (topicId) => topicPoolFrom(await loadVocabCache(), topicId);
+export const generalWordPool = async (level) => generalPoolFrom(await loadVocabCache(), level);
 export async function growTopic(topicId, extra = 40) {
   const t = topicById[topicId];
   if (!t || !aiEnabled()) return false;
-  const have = topicWordPool(topicId);
+  const have = await topicWordPool(topicId);
   const words = await generateVocab({ topic: t.title + ' (' + t.id.replace(/-/g, ' ') + ')', level: t.level, n: extra, exclude: have.map((w) => w.w) });
-  const prev = getCached('vocab:' + topicId) || [];
-  setCached('vocab:' + topicId, 'vocab', [...prev, ...words.map((w) => ({ ...w, topic: topicId }))]);
+  const prev = await getCached('vocab:' + topicId) || [];
+  await setCached('vocab:' + topicId, 'vocab', [...prev, ...words.map((w) => ({ ...w, topic: topicId }))]);
   return true;
 }
 export async function growGeneral(level, extra = 40) {
   if (!aiEnabled()) return false;
-  const have = generalWordPool(level);
+  const have = await generalWordPool(level);
   const words = await generateVocab({ topic: 'high-frequency academic and everyday words', level, n: extra, exclude: have.map((w) => w.w) });
-  const prev = getCached('vocab:general:' + level) || [];
-  setCached('vocab:general:' + level, 'vocab', [...prev, ...words.map((w) => ({ ...w, topic: 'general' }))]);
+  const prev = await getCached('vocab:general:' + level) || [];
+  await setCached('vocab:general:' + level, 'vocab', [...prev, ...words.map((w) => ({ ...w, topic: 'general' }))]);
   return true;
 }
 
@@ -82,30 +83,30 @@ export const pickSpeaking = (level, salt) => nearestByLevel(speakingPool, level,
 
 // Returns content for a task, creating (and caching) it the first time. `key` makes it stable on reopen.
 export async function readingFor(key, { level, topic, grounded = false, source = null }, salt) {
-  const cached = getCached(key);
+  const cached = await getCached(key);
   if (cached) return cached;
   let c;
   if (aiEnabled()) { try { c = { ...(await generateReading({ level, topic, grounded, source })), generated: true }; } catch { /* fallback */ } }
   if (!c) c = { ...pickReading(level, salt), generated: false };
-  setCached(key, 'reading', c);
+  await setCached(key, 'reading', c);
   return c;
 }
 export async function listeningFor(key, { level, topic, format = 'monologue', source = null }, salt) {
-  const cached = getCached(key);
+  const cached = await getCached(key);
   if (cached) return cached;
   let c;
   if (aiEnabled()) { try { c = { ...(await generateListening({ level, topic, format, source })), generated: true }; } catch { /* fallback */ } }
   if (!c) c = { ...pickListening(level, salt), generated: false };
-  setCached(key, 'listening', c);
+  await setCached(key, 'listening', c);
   return c;
 }
 export async function promptFor(key, kind, { level, topic, focus }, salt) {
-  const cached = getCached(key);
+  const cached = await getCached(key);
   if (cached) return cached;
   let c;
   if (aiEnabled()) { try { c = { ...(await generatePrompt({ kind, level, topic, focus })), generated: true }; } catch { /* fallback */ } }
   if (!c) c = { ...(kind === 'writing' ? pickWriting(level, salt) : pickSpeaking(level, salt)), generated: false };
-  setCached(key, kind + '-prompt', c);
+  await setCached(key, kind + '-prompt', c);
   return c;
 }
 export const cacheGet = getCached;

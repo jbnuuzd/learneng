@@ -1,5 +1,5 @@
 // Personal trajectory planner: turns (current level, target, deadline, hours/day) into dated daily tasks.
-import { q, j, unj, tx } from './lib/db.js';
+import { q, j, unj, stmt, batch } from './lib/db.js';
 import { addDays, diffDays } from './lib/dates.js';
 import { clamp, toCefr, levelIndex, LEVELS, goalAbility } from './lib/scale.js';
 import { abilities, overall } from './lib/progress.js';
@@ -18,12 +18,12 @@ const ORDER = ['grammar', 'reading', 'listening', 'speaking', 'writing'];
 const THEMES = ['education', 'environment', 'technology', 'health', 'work', 'travel', 'society', 'media', 'science', 'culture', 'family', 'sport'];
 
 // ---- weaknesses ---------------------------------------------------------------
-export function weakTopics(userId) {
+export async function weakTopics(userId) {
   const acc = {};
-  const diag = q.get("SELECT result_json FROM diagnostics WHERE user_id=? AND status='done' ORDER BY id DESC LIMIT 1", userId);
+  const diag = await q.get("SELECT result_json FROM diagnostics WHERE user_id=? AND status='done' ORDER BY id DESC LIMIT 1", userId);
   const r = unj(diag?.result_json);
   for (const [t, v] of Object.entries(r?.topics || {})) acc[t] = { s: v.correct, n: v.total };
-  for (const row of q.all("SELECT topic, AVG(score) a, COUNT(*) n FROM attempts WHERE user_id=? AND skill='grammar' AND score IS NOT NULL AND topic IS NOT NULL GROUP BY topic", userId)) {
+  for (const row of await q.all("SELECT topic, AVG(score) a, COUNT(*) n FROM attempts WHERE user_id=? AND skill='grammar' AND score IS NOT NULL AND topic IS NOT NULL GROUP BY topic", userId)) {
     const c = acc[row.topic] || { s: 0, n: 0 };
     acc[row.topic] = { s: c.s + row.a * row.n * 2, n: c.n + row.n * 2 };
   }
@@ -57,8 +57,8 @@ function chooseUnits({ currentLevel, targetLevel, weak, doneNew, slots }) {
   return need;
 }
 
-export function generatePlan({ userId, goal, from, assignedBy = null }) {
-  const ab = abilities(userId);
+export async function generatePlan({ userId, goal, from, assignedBy = null }) {
+  const ab = await abilities(userId);
   const cur = overall(ab) ?? 40;
   const targetAbility = goalAbility(goal);
   const start = from > goal.start_date ? from : goal.start_date;
@@ -66,7 +66,7 @@ export function generatePlan({ userId, goal, from, assignedBy = null }) {
   if (days < 1) throw new Error('Muddat tugagan');
   const M = Math.round(goal.hours_per_day * 60);
   const rem = Math.max(0, M - VOCAB_MINUTES);
-  const weak = weakTopics(userId);
+  const weak = await weakTopics(userId);
   const avg = (ab.grammar + ab.reading + ab.listening + ab.speaking + ab.writing) / 5 || cur;
 
   // weakness-adjusted share per category
@@ -75,7 +75,7 @@ export function generatePlan({ userId, goal, from, assignedBy = null }) {
   for (const c of ORDER) { const a = ab[c] ?? cur; sh[c] = BASE_SHARE[c] * (1 + clamp((avg - a) / 25, -0.3, 0.7)); tot += sh[c]; }
   for (const c of ORDER) sh[c] /= tot;
 
-  const doneNew = new Set(q.all("SELECT ref_json FROM tasks WHERE user_id=? AND type='grammar' AND status='done'", userId).map((r) => unj(r.ref_json, {})).filter((r) => r.mode === 'new').map((r) => r.unit));
+  const doneNew = new Set((await q.all("SELECT ref_json FROM tasks WHERE user_id=? AND type='grammar' AND status='done'", userId)).map((r) => unj(r.ref_json, {})).filter((r) => r.mode === 'new').map((r) => r.unit));
 
   // 1) lay out which categories appear on which day
   const acc = Object.fromEntries(ORDER.map((c) => [c, 0]));
@@ -148,20 +148,24 @@ export function generatePlan({ userId, goal, from, assignedBy = null }) {
   const meta = { start, deadline: goal.deadline, days, minutesPerDay: M, hoursPerDay: goal.hours_per_day, shares: sh, targetCefr: goal.target_cefr, targetIelts: goal.target_ielts,
     startAbility: Math.round(cur * 10) / 10, targetAbility, units: seq.map((u) => u.id), weak, newWordsPerDay: NEW_WORDS_PER_DAY, generatedAt: new Date().toISOString(), generatedBy: assignedBy };
 
-  return tx(() => {
-    // keep history: remove only future, untouched, system-generated tasks
-    q.run("DELETE FROM tasks WHERE user_id=? AND source='plan' AND date>=? AND status='todo' AND NOT EXISTS (SELECT 1 FROM attempts a WHERE a.task_id=tasks.id)", userId, start);
-    q.run('UPDATE plans SET active=0 WHERE user_id=?', userId);
-    const planId = q.run('INSERT INTO plans(user_id, meta_json) VALUES(?,?)', userId, j(meta)).lastInsertRowid;
-    for (const r of rows) {
-      q.run('INSERT INTO tasks(plan_id,user_id,date,ord,type,ref_json,minutes,source) VALUES(?,?,?,?,?,?,?,?)', planId, userId, r.date, r.ord, r.type, j(r.ref), r.minutes, 'plan');
-    }
-    return { planId, meta, tasks: rows.length };
-  });
+  // New plan row is created inactive; one atomic batch then swaps it in, clears untouched future tasks and inserts the new ones.
+  const planId = (await q.run('INSERT INTO plans(user_id, meta_json, active) VALUES(?,?,0)', userId, j(meta))).lastInsertRowid;
+  const stmts = [
+    stmt("DELETE FROM tasks WHERE user_id=? AND source='plan' AND date>=? AND status='todo' AND NOT EXISTS (SELECT 1 FROM attempts a WHERE a.task_id=tasks.id)", userId, start),
+    stmt('UPDATE plans SET active=0 WHERE user_id=?', userId),
+  ];
+  const INS = "INSERT INTO tasks(plan_id,user_id,date,ord,type,ref_json,minutes,source) SELECT ?, ?, json_extract(value,'$.d'), json_extract(value,'$.o'), json_extract(value,'$.t'), json_extract(value,'$.r'), json_extract(value,'$.m'), 'plan' FROM json_each(?)";
+  for (let i = 0; i < rows.length; i += 250) {
+    const chunk = rows.slice(i, i + 250).map((r) => ({ d: r.date, o: r.ord, t: r.type, r: j(r.ref), m: r.minutes }));
+    stmts.push(stmt(INS, planId, userId, j(chunk)));
+  }
+  stmts.push(stmt('UPDATE plans SET active=1 WHERE id=?', planId));
+  await batch(stmts);
+  return { planId, meta, tasks: rows.length };
 }
 
-export const activePlan = (userId) => {
-  const p = q.get('SELECT * FROM plans WHERE user_id=? AND active=1 ORDER BY id DESC LIMIT 1', userId);
+export const activePlan = async (userId) => {
+  const p = await q.get('SELECT * FROM plans WHERE user_id=? AND active=1 ORDER BY id DESC LIMIT 1', userId);
   return p ? { ...p, meta: unj(p.meta_json, {}) } : null;
 };
 export { LEVELS };

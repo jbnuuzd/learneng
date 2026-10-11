@@ -1,88 +1,93 @@
-# LearnEng — shaxsiy ingliz tili platformasi (CEFR / IELTS)
+# LearnEng — shaxsiy ingliz tili platformasi (CEFR / IELTS) · Cloudflare uchun
 
 O'quvchi ro'yxatdan o'tadi → ~1 soatlik diagnostika (grammatika, lug'at, reading, listening, writing, speaking) →
-CEFR va IELTS darajasi → maqsad (masalan C1 / IELTS 7.5) va muddat → **shaxsiy kunlik traektoriya** →
-har kuni nazariya + 15 xil interaktiv mashq, **kuniga 52 ta yangi so'z**, AI baholash va o'qituvchi belgilagan uslubdagi fikr-mulohaza.
+CEFR va IELTS darajasi → maqsad va muddat → **shaxsiy kunlik traektoriya** → har kuni nazariya + 15 xil interaktiv mashq,
+**kuniga 52 ta yangi so'z**, AI baholash va o'qituvchi belgilagan uslubdagi fikr-mulohaza.
+Virtual speaking trenajyor (10 xil AI ustoz), reading/listening trenajyorlari, o'qituvchi paneli.
 
-## Tez boshlash
+## Arxitektura (Cloudflare)
 
-Kerak: **Node.js 22.13 yoki yangi** (tashqi paketlar kerak emas).
+| Qism | Cloudflare xizmati |
+|---|---|
+| Sayt (HTML/JS/CSS, `public/`) | **Workers Static Assets** |
+| API (`server/worker.js`, `/api/*`) | **Worker** |
+| Ma'lumotlar bazasi (foydalanuvchilar, reja, natijalar) | **D1** (SQLite) — sxema `migrations/0001_init.sql` |
+| O'qituvchi yuklagan fayllar va TTS audio keshi | **R2** |
+| `GEMINI_API_KEY`, `TEACHER_SIGNUP_CODE` | **Secrets** |
+
+## Joylashtirish (deploy) — qadamma-qadam
+
+Kerak: Cloudflare akkaunti (**R2 ni yoqish uchun to'lov kartasi** talab qilinadi, bepul limit doirasida pul yechilmaydi), Node.js 20+.
 
 ```bash
-cp .env.example .env        # keyin .env ni oching va GEMINI_API_KEY ni kiriting
-npm start                   # http://localhost:3000
-npm test                    # 23 ta test (soxta Gemini serveri bilan ham)
+git clone https://github.com/jbnuuzd/learneng.git && cd learneng
+git checkout claude/open-platforms-english-teaching-scmx5f
+npm install
+npx wrangler login                                  # brauzerda Cloudflare'ga kirasiz
+
+npx wrangler d1 create learneng                     # chiqqan database_id ni nusxalang
+#   → wrangler.jsonc ichida "REPLACE_WITH_YOUR_D1_DATABASE_ID" o'rniga qo'ying
+npx wrangler r2 bucket create learneng-files        # fayllar uchun bucket
+npm run migrate:remote                              # jadvallarni D1 da yaratadi
+
+npx wrangler secret put GEMINI_API_KEY              # so'raganda API kalitni kiriting
+npx wrangler secret put TEACHER_SIGNUP_CODE         # o'qituvchi ro'yxatdan o'tish uchun maxfiy kod (MAJBURIY)
+
+npm run deploy                                      # → https://learneng.<akkaunt>.workers.dev
 ```
 
-API kalitisiz ham ishlaydi (tayyor kontent, oflayn tekshiruv, brauzer ovozi), lekin **AI baholash, speaking, TTS va cheksiz yangi kontent uchun kalit kerak**.
+Deploy'dan keyin tekshirish: `node scripts/smoke.mjs https://learneng.<akkaunt>.workers.dev`
+(agar `TEACHER_SIGNUP_CODE` o'rnatgan bo'lsangiz: `TEACHER_SIGNUP_CODE=kodingiz node scripts/smoke.mjs <url>`).
 
-## Gemini API kalitini ulash (Google AI Studio)
+**API kalitni qayerga qo'yish:** deploy qilingan saytda — `wrangler secret put GEMINI_API_KEY` yoki Cloudflare paneli →
+Workers & Pages → `learneng` → Settings → Variables and Secrets → *Add* (turi: **Secret**). Kalit kodga yoki gitga yozilmaydi.
+Kalitni https://aistudio.google.com/apikey dan oling. Secret qo'shgach qayta deploy shart emas, lekin yangi versiya chiqarish tavsiya etiladi (`npm run deploy`).
 
-1. https://aistudio.google.com/apikey ga kiring (Google akkaunt bilan).
-2. **Create API key** tugmasini bosing va kalitni nusxalang.
-3. Loyiha papkasida `.env` faylini oching (`.env.example` dan nusxa) va yozing:
-   ```
-   GEMINI_API_KEY=AIza...sizning_kalitingiz
-   ```
-4. Serverni qayta ishga tushiring (`npm start`). Chap menyuda «AI ulanmagan» belgisi yo'qoladi.
-5. (Ixtiyoriy) Lug'at bazasini oldindan to'ldiring: `npm run generate:vocab` — har bir IELTS mavzusi uchun yuzlab yangi so'z yaratiladi va keshlanadi.
+Lug'at bazasini to'ldirish: o'qituvchi sifatida kiring → **Materiallar va lug'at** → har bir mavzu yonidagi «+40 so'z» (Gemini yaratadi va D1 da saqlaydi).
 
-**Xavfsizlik:** kalit faqat serverdagi `.env` da turadi, brauzerga hech qachon yuborilmaydi. `.env` `.gitignore` da — uni GitHub'ga yuklamang.
-Modellar `.env` orqali almashtiriladi: `GEMINI_TEXT_MODEL` (standart `gemini-2.5-flash`), `GEMINI_TTS_MODEL` (standart `gemini-2.5-flash-preview-tts`). Google model nomlarini yangilasa, faqat shu qiymatlarni o'zgartiring.
+### Domen
+Dashboard → Workers & Pages → `learneng` → Settings → Domains & Routes → *Add custom domain* (domeningiz Cloudflare'da bo'lishi kerak).
 
-Gemini quyidagilar uchun ishlatiladi: yozma va og'zaki javoblarni IELTS mezonlari bo'yicha baholash (audio to'g'ridan-to'g'ri yuboriladi), tonli fikr-mulohaza, yangi reading/listening/lug'at/mavzu generatsiyasi,
-internetdan (Google Search grounding) matn topish, virtual speaking suhbatdoshlar, maqsadga erishish tahlili va **TTS** (ovozli o'qish, 2 spikerli dialoglar).
+### GitHub orqali avtomatik deploy (ixtiyoriy)
+Workers & Pages → Create → *Import a repository* → `jbnuuzd/learneng` → branch tanlang. Build komandasi shart emas; `wrangler.jsonc` o'qiladi.
+D1/R2 va secretlarni yuqoridagidek bir marta o'zingiz yarating.
+
+## Lokal ishlab chiqish
+
+```bash
+cp .dev.vars.example .dev.vars        # kalitni shu yerga yozing (gitga tushmaydi)
+npm run migrate:local                 # lokal D1 (miniflare)
+npm run dev                           # http://localhost:8787 (haqiqiy workerd ish vaqti)
+npm test                              # 23 ta test (soxta Gemini + D1/R2 almashtirgichlar)
+node scripts/smoke.mjs http://localhost:8787
+```
 
 ## Rollar va asosiy imkoniyatlar
 
-**O'quvchi**
-- *Traektoriya* — bugungi sana (masalan, 11 oktyabr 2026) uchun mashg'ulotlar, har birining taxminiy vaqti; kalendar bo'yicha oldingi/keyingi kunlar.
-- Grammatika darsi: nazariya slaydlari → test, bo'sh joy, xato topish, so'z tartibi, gap qayta yozish, moslashtirish, True/False, reading, listening, diktant, gap tuzish, tarjima, speaking, writing (15 xil).
-- Lug'at kuni: **40 ta bitta IELTS mavzusi so'zi + 12 ta kundalik so'z** (jami 52), so'ng test, esga tushirish, diktant, gap tuzish.
-- Reading / Listening / Speaking **trenajyorlari**: daraja, mavzu, manba tanlash; AI yangi matn/audio yaratadi, internetdan topadi yoki o'zingiz matn/transkript (masalan BBC 6 Minute English) joylaysiz.
-- Speaking trenajyor: **10 xil ustoz** (muloyim, jahldor, IELTS examiner, do'st, professor, HR, hazilkash, sayohat agenti, jurnalist, munozarachi), 8 rejim, daraja «Avto» (erishgan darajangiz) yoki qo'lda; oxirida xatolar, yutuqlar, tavsiyalar.
-- *Progress va tahlil* — ko'nikmalar bo'yicha dinamika va **«maqsadga haqiqatan erishish mumkinmi?»** tahlili.
+**O'quvchi:** diagnostika → maqsad/muddat → kunlik traektoriya (kalendar) → grammatika darsi (nazariya slaydlari + 15 xil mashq) →
+lug'at kuni (40 ta IELTS mavzu so'zi + 12 ta kundalik) → reading/listening/speaking trenajyorlari (AI yangi material, internetdan qidirish,
+BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq, tavsiya) → progress va «maqsadga erishish mumkinmi» tahlili.
 
-**O'qituvchi**
-- O'quvchilar ro'yxati, ogohlantirishlar (grafikdan orqada, faol emas, zaif mavzu), batafsil progress.
-- Fikr-mulohaza uslubi: **pozitiv / neytral / qat'iy** — standart yoki aniq bir kun uchun.
-- Qo'shimcha topshiriq berish (grammatika, lug'at, reading, listening, speaking, writing yoki o'z topshirig'i), o'chirish.
-- Traektoriyani o'zgartirish: soat, maqsad, muddat; zaif mavzu bo'yicha intervalli takrorlash; «hammasini qo'llash».
-- Kitob, PDF, audio va boshqa materiallarni yuklash (barcha yoki bitta o'quvchiga), izohlar.
+**O'qituvchi:** o'quvchilar ro'yxati va ogohlantirishlar, fikr-mulohaza uslubi (pozitiv/neytral/qat'iy — standart yoki aniq kun uchun),
+qo'shimcha topshiriq, zaif mavzu bo'yicha takrorlash, rejani qayta tuzish, kitob/PDF/audio yuklash, izohlar, lug'at bazasini to'ldirish.
 
-## Modul tuzilmasi
+## Kontent va mualliflik huquqi
 
-```
-server/
-  index.js            HTTP server, xavfsizlik sarlavhalari, CSRF himoyasi
-  planner.js          traektoriya generatori (soat, muddat, zaif mavzular, 52 so'z/kun)
-  analysis.js         maqsadga erishish modeli (soat, lug'at, grammatika qamrovi) + AI xulosa
-  lessons.js          vazifani o'ynaladigan darsga aylantirish, javoblar serverda qoladi
-  lib/                db (node:sqlite), auth, gemini (matn, audio, TTS), ai (baholash/generatsiya), grading, scale (CEFR↔IELTS)
-  routes/             auth, diagnostic, plan, tasks, trainers, speaking, teacher, materials
-  content/            grammatika (18 mavzu), lug'at, diagnostika, pool, ustozlar
-public/               frontend (vanilla ES modules, build kerak emas)
-test/                 API testlari + soxta Gemini serveri bilan AI testlari
-```
+Barcha o'quv matnlari **original**. Murphy *English Grammar in Use*, *Test Master*, Cambridge IELTS nashrlari mualliflik huquqi bilan himoyalangan,
+shuning uchun ulardan ko'chirilmagan. Litsenziyalangan materiallaringizni o'qituvchi paneli orqali PDF/audio sifatida yuklang.
+BBC kontenti ko'chirilmaydi: havola beriladi, transkriptni joylab AI orqali savollar yaratasiz.
 
-## Kontent va mualliflik huquqi — muhim
+## Cheklovlar va halol eslatmalar
 
-Platformadagi **barcha o'quv matnlari original** (shu loyiha uchun yozilgan). Murphy *English Grammar in Use*, *Test Master*, Cambridge IELTS kabi nashrlar mualliflik huquqi bilan himoyalangan, shuning uchun ularning test va matnlari ko'chirilmagan.
-Grammatika qoidalari o'zi umumiy bilim, ularning tushuntirishi original yozilgan; testlar ham original va CEFR tavsiflariga tayangan.
-Agar sizda litsenziyalangan yoki ochiq litsenziyali (CC) materiallar bo'lsa: o'qituvchi sifatida PDF/audio sifatida yuklang yoki `server/content/` dagi formatda qo'shing.
-BBC kontenti ko'chirilmaydi: tashqi havola beriladi, transkriptni o'zingiz joylab, AI orqali savollar yaratasiz.
-
-## Cheklovlar (halol eslatmalar)
-
-- Dastlabki kontent: 18 grammatika darsi (A1–C1), 8 mavzu × 40 so'z, 125 kundalik so'z. **Har kuni 52 ta YANGI so'z** ketma-ket oylab berilishi uchun Gemini kaliti kerak (yangi so'zlar yaratiladi va keshlanadi). Kalitsiz yangi so'zlar tugagach, takrorlash so'zlari qo'shiladi va tahlil buni ko'rsatadi.
-- CEFR/IELTS baholari — **taxminiy** model. Haqiqiy IELTS natijasini kafolatlamaydi. Writing/speaking aniqligi AI ga bog'liq.
-- Maqsadga erishish ehtimoli konservativ ichki model (daraja uchun ~200 soat, eslab qolish ~60%), AI xulosa shu ko'rsatkichlarga tayanadi.
-- Gemini bilan haqiqiy integratsiya mening muhitimda API kalitsiz sinab bo'lmadi: so'rov shakllari rasmiy hujjat bo'yicha yozilgan va soxta server bilan tekshirilgan. Birinchi ishga tushirishda diagnostika va bitta dars bilan tekshirib ko'ring.
-- Tarmoqqa chiqish (Gemini, Google Search) serverdan amalga oshadi; server joylashgan muhit `generativelanguage.googleapis.com` ga ruxsat berishi kerak.
-- Mikrofon HTTPS yoki `localhost` da ishlaydi (brauzer talabi).
-- Ma'lumotlar `data/` papkasida (SQLite + audio kesh + yuklangan fayllar) — zaxira nusxa oling.
-- Maxfiylik: o'quvchi javoblari va audio Gemini'ga yuboriladi; audio saqlanmaydi, matn va natijalar bazada qoladi. O'quvchilarni xabardor qiling.
-
-## Joylashtirish (deploy)
-
-`npm start` istalgan Node 22.13+ serverida ishlaydi. Productionda HTTPS (reverse proxy), `TEACHER_SIGNUP_CODE` (o'qituvchi sifatida ro'yxatdan o'tishni cheklash) va `data/` zaxirasini sozlang.
+- **Workers Free rejasi yetmasligi mumkin.** Free rejada har so'rovga ~10 ms CPU va 50 ta kichik so'rov (D1 so'rovlari ham) limiti bor;
+  reja yaratish, parol xeshlash (PBKDF2) va o'qituvchi paneli bundan oshishi mumkin. **Workers Paid (~$5/oy) tavsiya etiladi.**
+  Men lokal `workerd` da sinadim, Cloudflare'ning real limitlarida sinab ko'rmadim.
+- **Real Cloudflare akkauntiga deploy qilinmagan** (menda akkaunt yo'q). Lokal `wrangler dev` (haqiqiy workerd, lokal D1/R2) da to'liq oqim o'tdi;
+  birinchi deploy'dan keyin `scripts/smoke.mjs` ni ishga tushiring.
+- **Haqiqiy Gemini bilan sinalmagan** (kalit yo'q). So'rovlar rasmiy hujjatga mos yozilgan va soxta server bilan tekshirilgan. Model nomlari
+  `wrangler.jsonc` → `vars` da (`GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`), Google nomni o'zgartirsa shu yerda yangilang.
+- Tezlik cheklovi (`rateLimit`) har Worker nusxasida alohida (xotirada) — qat'iy global limit emas.
+- CEFR/IELTS baholari taxminiy; IELTS natijasini kafolatlamaydi. «Erishish ehtimoli» konservativ ichki model (~200 soat/daraja, eslab qolish ~60%).
+- Dastlabki kontent: 18 grammatika darsi (A1–C1), 8 mavzu × 40 so'z, 125 kundalik so'z. Oylab har kuni yangi so'zlar uchun Gemini kaliti kerak.
+- Maxfiylik: o'quvchi javoblari va audio Gemini'ga yuboriladi; audio saqlanmaydi (faqat natija va matn). O'quvchilarni xabardor qiling.
+- Mikrofon faqat HTTPS (yoki localhost) da ishlaydi — `workers.dev` HTTPS beradi.

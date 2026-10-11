@@ -1,18 +1,31 @@
-import os from 'node:os';
+import http from 'node:http';
 import fs from 'node:fs';
-import path from 'node:path';
+import { createD1, createR2 } from './shims.js';
 
-// Boots the real server on a random port with a throw-away database.
-export async function boot(env = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'learneng-'));
-  process.env.DATA_DIR = dir;
-  process.env.DB_FILE = path.join(dir, 'test.db');
-  for (const [k, v] of Object.entries(env)) process.env[k] = v;
-  const { createServer } = await import('../server/index.js');
-  const server = createServer();
+// Boots the real Worker (server/worker.js) behind a tiny Node http adapter, with in-memory D1 + R2 doubles.
+export async function boot(vars = {}) {
+  const schema = fs.readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8');
+  const env = { DB: createD1(schema), FILES: createR2(), ...vars };
+  const { setEnv } = await import('../server/lib/env.js');
+  setEnv(env);
+  const { default: worker } = await import('../server/worker.js');
+  const server = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) headers.set(k, Array.isArray(v) ? v.join(',') : v);
+    const request = new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
+    const response = await worker.fetch(request, env);
+    const out = Buffer.from(await response.arrayBuffer());
+    const rh = {};
+    response.headers.forEach((v, k) => { if (k !== 'set-cookie') rh[k] = v; });
+    const sc = response.headers.getSetCookie?.() || [];
+    if (sc.length) rh['set-cookie'] = sc;
+    res.writeHead(response.status, rh);
+    res.end(out);
+  });
   await new Promise((r) => server.listen(0, r));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  return { base, close: () => new Promise((r) => server.close(r)), dir };
+  return { base: `http://127.0.0.1:${server.address().port}`, env, close: () => new Promise((r) => server.close(r)) };
 }
 
 export class Client {

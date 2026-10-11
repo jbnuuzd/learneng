@@ -15,9 +15,9 @@ export async function submitStage({ user, taskRow, stageKey, body, date }) {
   const lesson = await buildLesson(taskRow);
   const stage = lesson.stages.find((s) => s.key === stageKey);
   if (!stage) throw bad('Bunday bosqich yo\'q');
-  const tone = effectiveTone(user.id, date);
+  const tone = await effectiveTone(user.id, date);
   const level = stage.level;
-  const prev = q.get('SELECT COUNT(*) n FROM attempts WHERE task_id=? AND stage_key=?', taskRow.id, stageKey).n;
+  const prev = (await q.get('SELECT COUNT(*) n FROM attempts WHERE task_id=? AND stage_key=?', taskRow.id, stageKey)).n;
   let result;
 
   if (stage.grade === 'none') {
@@ -82,28 +82,30 @@ export async function submitStage({ user, taskRow, stageKey, body, date }) {
   }
 
   // ---- persist ----
-  q.run('INSERT INTO attempts(user_id,task_id,stage_key,stage_type,skill,topic,score,detail_json,feedback,tone,ai) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+  await q.run('INSERT INTO attempts(user_id,task_id,stage_key,stage_type,skill,topic,score,detail_json,feedback,tone,ai) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
     user.id, taskRow.id, stageKey, stage.pub.type, stage.skill || null, stage.topic || null, result.score, j({ items: result.items, extra: result.extra }), result.feedback, tone, result.ai ? 1 : 0);
 
   // Skill estimate: first attempt of a stage only (so retries do not inflate the numbers).
   if (prev === 0 && stage.skill) {
-    if (result.ability != null) applyEvidence(user.id, stage.skill, result.ability, 0.18, date);
-    else if (result.score != null) applyEvidence(user.id, stage.skill, evidenceFromScore(LEVEL_DIFF[level] ?? 45, result.score), 0.07, date);
+    if (result.ability != null) await applyEvidence(user.id, stage.skill, result.ability, 0.18, date);
+    else if (result.score != null) await applyEvidence(user.id, stage.skill, evidenceFromScore(LEVEL_DIFF[level] ?? 45, result.score), 0.07, date);
   }
   // Vocabulary bookkeeping
   if (stage.words && stageKey.startsWith('flash')) {
-    for (const w of stage.words) q.run('INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on) VALUES(?,?,?,?)', user.id, w.w.toLowerCase(), w.topic || null, date);
+    await q.run("INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on) SELECT ?, json_extract(value,'$.w'), json_extract(value,'$.t'), ? FROM json_each(?)", user.id, date, j(stage.words.map((w) => ({ w: w.w.toLowerCase(), t: w.topic || null }))));
   }
   if (stage.skill === 'vocab' && result.items?.length && stage.grade !== 'sentences') {
     // not tracked per word for quizzes with generated distractors; keep it simple
   }
 
   // Task status
-  const done = new Set(q.all('SELECT DISTINCT stage_key FROM attempts WHERE task_id=?', taskRow.id).map((r) => r.stage_key));
+  const done = new Set((await q.all('SELECT DISTINCT stage_key FROM attempts WHERE task_id=?', taskRow.id)).map((r) => r.stage_key));
   const allDone = lesson.stages.every((s) => done.has(s.key));
-  const scores = lesson.stages.map((s) => q.get('SELECT score FROM attempts WHERE task_id=? AND stage_key=? AND score IS NOT NULL ORDER BY id DESC LIMIT 1', taskRow.id, s.key)?.score).filter((x) => x != null);
+  const latest = new Map();
+  for (const r of await q.all('SELECT stage_key, score FROM attempts WHERE task_id=? AND score IS NOT NULL ORDER BY id', taskRow.id)) latest.set(r.stage_key, r.score);
+  const scores = [...latest.values()];
   const taskScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-  q.run("UPDATE tasks SET status=?, score=?, done_at=CASE WHEN ?=1 THEN datetime('now') ELSE done_at END WHERE id=?", allDone ? 'done' : 'partial', taskScore, allDone ? 1 : 0, taskRow.id);
+  await q.run("UPDATE tasks SET status=?, score=?, done_at=CASE WHEN ?=1 THEN datetime('now') ELSE done_at END WHERE id=?", allDone ? 'done' : 'partial', taskScore, allDone ? 1 : 0, taskRow.id);
 
   return { ...result, tone, stageKey, task: { status: allDone ? 'done' : 'partial', score: taskScore, doneStages: [...done] }, level: stage.level ? describe(LEVEL_DIFF[stage.level]).cefr : null };
 }

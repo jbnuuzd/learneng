@@ -176,5 +176,18 @@ export async function teacherMaterialsView() {
   const box = h('div', { class: 'card' });
   const load = async () => { const list = await api.get('/api/teacher/materials'); mount(box, h('h2', {}, 'Barcha materiallarim'), materialList(list, load)); };
   await load();
-  return h('div', {}, h('h1', {}, 'Materiallar'), h('div', { class: 'card' }, h('h2', {}, 'Barcha o\'quvchilar uchun yuklash'), h('p', { class: 'muted' }, "Kitoblar, PDF, audio va boshqa o'quv materiallari. Muayyan o'quvchiga yuklash uchun uning sahifasidagi «Materiallar» bo'limidan foydalaning."), uploadForm(null, load)), box);
+  const vbox = h('div', { class: 'card' });
+  const loadVocab = async () => {
+    const v = await api.get('/api/teacher/vocab');
+    const btn = (label, body) => h('button', { class: 'btn secondary sm', disabled: !v.ai, title: v.ai ? '' : 'Gemini API kaliti kerak', onclick: async (e) => {
+      e.target.disabled = true; e.target.replaceChildren(h('span', { class: 'spinner' }), ' AI…');
+      try { await api.post('/api/teacher/vocab/generate', body); toast('+40 ta so\'z qo\'shildi ✓'); loadVocab(); } catch (er) { toast(er.message, true); e.target.disabled = false; e.target.textContent = label; }
+    } }, label);
+    mount(vbox, h('h2', {}, "Lug'at bazasi"), h('p', { class: 'muted' }, `Kuniga ${52} ta yangi so'z uchun baza yetarli bo'lishi kerak. Har bosishda Gemini 40 ta yangi so'z yaratadi va saqlaydi.${v.ai ? '' : " Hozir AI ulanmagan."}`),
+      h('table', { class: 't' }, h('thead', {}, h('tr', {}, ['IELTS mavzusi', 'Daraja', "So'zlar", ''].map((t) => h('th', {}, t)))),
+        h('tbody', {}, v.topics.map((t) => h('tr', {}, h('td', {}, t.title), h('td', {}, t.level), h('td', {}, String(t.words)), h('td', {}, btn('+40 so\'z', { topic: t.id })))),
+          v.general.map((g) => h('tr', {}, h('td', {}, 'Kundalik so\'zlar'), h('td', {}, g.level), h('td', {}, String(g.words)), h('td', {}, btn('+40 so\'z', { level: g.level })))))));
+  };
+  await loadVocab();
+  return h('div', {}, h('h1', {}, 'Materiallar va lug\'at'), h('div', { class: 'card' }, h('h2', {}, 'Barcha o\'quvchilar uchun yuklash'), h('p', { class: 'muted' }, "Kitoblar, PDF, audio va boshqa o'quv materiallari. Muayyan o'quvchiga yuklash uchun uning sahifasidagi «Materiallar» bo'limidan foydalaning."), uploadForm(null, load)), box, vbox);
 }

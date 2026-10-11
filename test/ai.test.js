@@ -80,7 +80,7 @@ test('plan, then tone-aware AI feedback for objective, sentence, writing and spe
   const day = (await student.get('/api/plan/day')).data;
   const gid = day.tasks.find((t) => t.type === 'grammar').id;
   const { q } = await import('../server/lib/db.js');
-  const unit = units[JSON.parse(q.get('SELECT ref_json FROM tasks WHERE id=?', gid).ref_json).unit];
+  const unit = units[JSON.parse((await q.get('SELECT ref_json FROM tasks WHERE id=?', gid)).ref_json).unit];
   const sid = (await teacher.get('/api/teacher/students')).data.students[0].id;
   await teacher.put(`/api/teacher/students/${sid}/tone`, { tone: 'negative' });
   let r = await student.post(`/api/tasks/${gid}/stage/mcq`, { answers: unit.mcq.map(() => 0) });
@@ -125,7 +125,7 @@ test('TTS: Gemini request shape, WAV wrapper, disk cache, multi-speaker config',
   assert.ok(cfg.multiSpeakerVoiceConfig || cfg.voiceConfig, 'speech config present');
   await student.get('/api/tts/' + audio);
   assert.equal(seen.filter((s) => s.body.generationConfig?.responseModalities).length, before + 1, 'second request served from cache');
-  assert.equal((await student.get('/api/tts/' + 'f'.repeat(24))).status, 404, 'unknown audio id is rejected (no arbitrary TTS)');
+  assert.equal((await student.get('/api/tts/' + 'f'.repeat(32))).status, 404, 'unknown audio id is rejected (no arbitrary TTS)');
 });
 
 test('trainers generate fresh AI content each time, support pasted transcripts', async () => {
@@ -164,9 +164,9 @@ test('vocabulary: when seed words run out Gemini tops the topic up (40 topic wor
   const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
   const day = (await student.get('/api/plan/day?date=' + tomorrow)).data;
   const v = day.tasks.find((t) => t.type === 'vocab');
-  const ref = JSON.parse(q.get('SELECT ref_json FROM tasks WHERE id=?', v.id).ref_json);
+  const ref = JSON.parse((await q.get('SELECT ref_json FROM tasks WHERE id=?', v.id)).ref_json);
   const seed = topics.find((t) => t.id === ref.topic);
-  if (seed) for (const w of seed.words) q.run('INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on) VALUES(?,?,?,?)', 2, w.w.toLowerCase(), seed.id, date);
+  if (seed) for (const w of seed.words) await q.run('INSERT OR IGNORE INTO learned_words(user_id,word,topic,learned_on) VALUES(?,?,?,?)', 2, w.w.toLowerCase(), seed.id, date);
   const les = (await student.get('/api/tasks/' + v.id)).data;
   const flash = les.stages.filter((s) => s.type === 'flash').flatMap((s) => s.words.map((w) => w.w.toLowerCase()));
   assert.ok(flash.length >= 50, 'still >= 50 new words, got ' + flash.length);

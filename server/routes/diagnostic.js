@@ -39,15 +39,15 @@ function scoreChoice(items, answers) {
   return { ability, correct, total: graded.length, byLevel, graded };
 }
 
-function getDiag(userId) {
-  let d = q.get("SELECT * FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1", userId);
-  if (!d) { const id = q.run('INSERT INTO diagnostics(user_id) VALUES(?)', userId).lastInsertRowid; d = q.get('SELECT * FROM diagnostics WHERE id=?', id); }
+async function getDiag(userId) {
+  let d = await q.get("SELECT * FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1", userId);
+  if (!d) { const id = (await q.run('INSERT INTO diagnostics(user_id) VALUES(?)', userId)).lastInsertRowid; d = await q.get('SELECT * FROM diagnostics WHERE id=?', id); }
   return d;
 }
 
 export function registerDiagnostic(r) {
-  r.get('/api/diagnostic', ({ user }) => {
-    const d = q.get("SELECT * FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1", user.id);
+  r.get('/api/diagnostic', async ({ user }) => {
+    const d = await q.get("SELECT * FROM diagnostics WHERE user_id=? ORDER BY id DESC LIMIT 1", user.id);
     const sections = unj(d?.sections_json, {});
     return {
       status: d?.status || 'none', sections: SECTIONS.map((s) => ({ ...s, done: !!sections[s.id] })),
@@ -57,13 +57,13 @@ export function registerDiagnostic(r) {
     };
   }, { role: 'student' });
 
-  r.post('/api/diagnostic/restart', ({ user }) => {
-    q.run('INSERT INTO diagnostics(user_id) VALUES(?)', user.id);
+  r.post('/api/diagnostic/restart', async ({ user }) => {
+    await q.run('INSERT INTO diagnostics(user_id) VALUES(?)', user.id);
     return { ok: true };
   }, { role: 'student' });
 
   r.post('/api/diagnostic/section/:name', async ({ user, params, body, date }) => {
-    const d = getDiag(user.id);
+    const d = await getDiag(user.id);
     if (d.status === 'done') throw bad('Diagnostika yakunlangan. Qayta boshlash uchun «Qayta topshirish» ni bosing.');
     const name = params.name;
     if (!SECTIONS.some((s) => s.id === name)) throw bad("Bunday bo'lim yo'q");
@@ -108,12 +108,12 @@ export function registerDiagnostic(r) {
         tasks: outs.map((o) => o && { transcript: o.transcript, cefr: o.cefr, band: o.band, criteria: o.criteria, strengths: o.strengths, weaknesses: o.weaknesses, corrections: o.corrections, feedback: o.feedback }) };
     }
     sections[name] = res;
-    q.run('UPDATE diagnostics SET sections_json=? WHERE id=?', j(sections), d.id);
+    await q.run('UPDATE diagnostics SET sections_json=? WHERE id=?', j(sections), d.id);
     return { ok: true, section: name, summary: { ability: res.ability != null ? describe(res.ability) : null, correct: res.correct, total: res.total, ai: res.ai } };
   }, { role: 'student' });
 
-  r.post('/api/diagnostic/finish', ({ user, date }) => {
-    const d = getDiag(user.id);
+  r.post('/api/diagnostic/finish', async ({ user, date }) => {
+    const d = await getDiag(user.id);
     if (d.status === 'done') return unj(d.result_json);
     const s = unj(d.sections_json, {});
     const missing = SECTIONS.filter((x) => x.id !== 'speaking' && !s[x.id]).map((x) => x.title);
@@ -121,7 +121,7 @@ export function registerDiagnostic(r) {
     const abil = { grammar: s.grammar.ability, vocab: s.vocab.ability, reading: s.reading.ability, listening: s.listening.ability, writing: s.writing.ability, speaking: s.speaking?.ability };
     let speakingEstimated = false;
     if (abil.speaking == null) { abil.speaking = clamp((abil.grammar + abil.listening) / 2 - 4, 0, 100); speakingEstimated = true; }
-    for (const k of SKILLS) setAbility(user.id, k, abil[k], date);
+    for (const k of SKILLS) await setAbility(user.id, k, abil[k], date);
     const ov = overall(abil);
     const topics = s.grammar.topics || {};
     const weakTopicIds = Object.entries(topics).filter(([, v]) => v.correct / v.total < 0.65).map(([t]) => t);
@@ -134,7 +134,7 @@ export function registerDiagnostic(r) {
       sections: { writing: s.writing, speaking: s.speaking || null },
       aiAssessedWritingSpeaking: !!(s.writing.ai || s.speaking?.ai), finishedAt: new Date().toISOString(),
     };
-    q.run("UPDATE diagnostics SET status='done', result_json=?, finished_at=datetime('now') WHERE id=?", j(result), d.id);
+    await q.run("UPDATE diagnostics SET status='done', result_json=?, finished_at=datetime('now') WHERE id=?", j(result), d.id);
     return result;
   }, { role: 'student' });
 }

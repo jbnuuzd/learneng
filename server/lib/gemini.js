@@ -1,7 +1,5 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { cfg } from './env.js';
+import { cfg, getEnv } from './env.js';
+import { q } from './db.js';
 
 export class AiError extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -78,13 +76,16 @@ export async function generateText(prompt, { system = '', temperature = 0.7, his
 export const VOICES = ['Kore', 'Puck', 'Charon', 'Fenrir', 'Aoede', 'Leda', 'Orus', 'Zephyr', 'Achird', 'Sulafat', 'Algenib', 'Callirrhoe'];
 
 export function pcmToWav(pcm, rate = 24000, channels = 1) {
-  const h = Buffer.alloc(44);
-  h.write('RIFF', 0); h.writeUInt32LE(36 + pcm.length, 4); h.write('WAVE', 8); h.write('fmt ', 12);
-  h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(channels, 22); h.writeUInt32LE(rate, 24);
-  h.writeUInt32LE(rate * channels * 2, 28); h.writeUInt16LE(channels * 2, 32); h.writeUInt16LE(16, 34);
-  h.write('data', 36); h.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([h, pcm]);
+  const out = new Uint8Array(44 + pcm.length), v = new DataView(out.buffer);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + pcm.length, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, channels, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * channels * 2, true); v.setUint16(32, channels * 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, pcm.length, true);
+  out.set(pcm, 44);
+  return out;
 }
+const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 async function synthesize(text, { voice = 'Kore', speakers = null, style = '' } = {}) {
   const prompt = (style ? style + ': ' : '') + text;
@@ -98,39 +99,55 @@ async function synthesize(text, { voice = 'Kore', speakers = null, style = '' } 
   const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
   if (!part) throw new AiError('failed', 'TTS audio qaytarmadi');
   const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || '')?.[1] || 24000);
-  return pcmToWav(Buffer.from(part.inlineData.data, 'base64'), rate);
+  return pcmToWav(fromB64(part.inlineData.data), rate);
 }
 
-const ttsDir = () => { const d = path.join(cfg.dataDir, 'tts'); fs.mkdirSync(d, { recursive: true }); return d; };
-export const ttsId = (text, voice = 'Kore', speakers = null) =>
-  crypto.createHash('sha1').update(JSON.stringify([text, voice, speakers])).digest('hex').slice(0, 24);
+// Short, stable content id: two independent 53-bit hashes (no node:crypto needed on Workers).
+function cyrb53(str, seed) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+export const ttsId = (text, voice = 'Kore', speakers = null, style = '') => {
+  const k = JSON.stringify([text, voice, speakers, style]);
+  return cyrb53(k, 1) + cyrb53(k, 7);
+};
 
-// text/voice registry: lesson builders register what an audio id means, so clients never send arbitrary text to TTS
-const registry = new Map();
+// Lesson builders are synchronous: they register what an audio id means and the worker flushes the
+// batch to D1 once per request (one query). Clients never send text to the TTS endpoint.
+let pending = new Map();
 export function registerTts(text, { voice = 'Kore', speakers = null, style = '' } = {}) {
-  const id = ttsId(text, voice, speakers);
-  registry.set(id, { text, voice, speakers, style, at: Date.now() });
-  if (registry.size > 5000) { // drop the oldest quarter
-    const old = [...registry.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, 1250);
-    for (const [k] of old) registry.delete(k);
-  }
+  const id = ttsId(text, voice, speakers, style);
+  pending.set(id, { text, voice, speakers, style });
   return id;
 }
-export const lookupTts = (id) => registry.get(id) || null;
-
+export async function flushTts() {
+  if (!pending.size) return;
+  const entries = [...pending.entries()];
+  pending = new Map();
+  for (let i = 0; i < entries.length; i += 150) {
+    const chunk = entries.slice(i, i + 150).map(([id, v]) => ({ id, j: JSON.stringify(v) }));
+    await q.run('INSERT OR IGNORE INTO tts_registry(id,json) SELECT json_extract(value,\'$.id\'), json_extract(value,\'$.j\') FROM json_each(?)', JSON.stringify(chunk));
+  }
+}
 const plainText = (t) => t.replace(/^TTS the following conversation between .*?:\n/, '');
 
-// Returns { wav: Buffer } or { fallback: true, text } so the browser can use speechSynthesis.
+// Returns { body, size } (WAV from R2 cache or freshly synthesised) or { fallback: true, text } for browser speech.
 export async function ttsAudio(id) {
-  const entry = registry.get(id);
-  if (!entry) return null;
-  const file = path.join(ttsDir(), id + '.wav');
-  if (fs.existsSync(file)) return { file };
+  const files = getEnv().FILES;
+  const key = `tts/${id}.wav`;
+  const hit = files && (await files.get(key));
+  if (hit) return { body: hit.body, size: hit.size };
+  const row = await q.get('SELECT json FROM tts_registry WHERE id=?', id);
+  if (!row) return null;
+  const entry = JSON.parse(row.json);
   if (!aiEnabled()) return { fallback: true, text: plainText(entry.text), voice: entry.voice };
   try {
     const wav = await synthesize(entry.text, entry);
-    fs.writeFileSync(file, wav);
-    return { file };
+    if (files) await files.put(key, wav, { httpMetadata: { contentType: 'audio/wav' } });
+    return { body: wav, size: wav.length };
   } catch {
     return { fallback: true, text: plainText(entry.text), voice: entry.voice };
   }

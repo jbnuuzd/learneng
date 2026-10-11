@@ -105,7 +105,7 @@ test('today view and lessons (vocab: >=50 words, topic list of 40)', async () =>
 
 test('stage submit: correct answers score 100%, wrong answers get tone-based feedback', async () => {
   const lesson = (await student.get('/api/tasks/' + taskIds.grammar)).data;
-  const unitId = JSON.parse((await import('../server/lib/db.js')).q.get('SELECT ref_json FROM tasks WHERE id=?', taskIds.grammar).ref_json).unit;
+  const unitId = JSON.parse((await (await import('../server/lib/db.js')).q.get('SELECT ref_json FROM tasks WHERE id=?', taskIds.grammar)).ref_json).unit;
   const u = units[unitId];
   const mcq = lesson.stages.find((s) => s.key === 'mcq');
   let r = await student.post(`/api/tasks/${taskIds.grammar}/stage/mcq`, { answers: u.mcq.map((x) => x.a) });
@@ -132,11 +132,11 @@ test('vocab flashcards mark words as learned; next vocab day gives different wor
   let r = await student.post(`/api/tasks/${taskIds.vocab}/stage/flash-topic`, {});
   assert.equal(r.status, 200);
   const { q } = await import('../server/lib/db.js');
-  assert.equal(q.get('SELECT COUNT(*) n FROM learned_words').n, 40);
+  assert.equal((await q.get('SELECT COUNT(*) n FROM learned_words')).n, 40);
   const tomorrow = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
   const day2 = (await student.get('/api/plan/day?date=' + tomorrow)).data;
   const v2 = (await student.get('/api/tasks/' + day2.tasks.find((t) => t.type === 'vocab').id)).data;
-  const w1 = new Set(q.all('SELECT word FROM learned_words').map((x) => x.word));
+  const w1 = new Set((await q.all('SELECT word FROM learned_words')).map((x) => x.word));
   const flashed = v2.stages.filter((s) => s.type === 'flash').flatMap((s) => s.words.map((w) => w.w.toLowerCase()));
   assert.ok(flashed.length >= 50, 'day2 words ' + flashed.length);
   assert.equal(flashed.filter((w) => w1.has(w) && v2.stages.find((s) => s.key === 'flash-review') == null).length, 0, 'no repeats unless labelled review');

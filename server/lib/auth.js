@@ -1,42 +1,49 @@
-import crypto from 'node:crypto';
 import { q } from './db.js';
 import { HttpError } from './http.js';
 
 const DAY = 86400000;
-export function hashPassword(pw) {
-  const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(pw, salt, 64);
-  return salt.toString('hex') + ':' + hash.toString('hex');
+const ITER = 100000;                                  // Workers' PBKDF2 maximum
+const enc = new TextEncoder();
+const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
+const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
+const b64url = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+
+async function derive(pw, salt, iter) {
+  const key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, key, 256));
 }
-export function verifyPassword(pw, stored) {
-  const [s, h] = stored.split(':');
-  const hash = crypto.scryptSync(pw, Buffer.from(s, 'hex'), 64);
-  return crypto.timingSafeEqual(hash, Buffer.from(h, 'hex'));
+export async function hashPassword(pw) {
+  const salt = rand(16);
+  return `pbkdf2$${ITER}$${hex(salt)}$${hex(await derive(pw, salt, ITER))}`;
 }
-export function createSession(userId) {
-  const token = crypto.randomBytes(32).toString('base64url');
-  q.run('INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)', token, userId, Date.now() + 30 * DAY);
+export async function verifyPassword(pw, stored) {
+  const [alg, iter, salt, hash] = stored.split('$');
+  if (alg !== 'pbkdf2') return false;
+  const got = await derive(pw, unhex(salt), Number(iter));
+  const want = unhex(hash);
+  let diff = got.length ^ want.length;
+  for (let i = 0; i < got.length; i++) diff |= got[i] ^ (want[i] ?? 0);   // constant-time compare
+  return diff === 0;
+}
+export async function createSession(userId) {
+  const token = b64url(rand(32));
+  await q.run('INSERT INTO sessions(token,user_id,expires_at) VALUES(?,?,?)', token, userId, Date.now() + 30 * DAY);
   return token;
 }
-export function userFromToken(token) {
+export async function userFromToken(token) {
   if (!token) return null;
-  const s = q.get('SELECT user_id, expires_at FROM sessions WHERE token=?', token);
+  const s = await q.get('SELECT user_id, expires_at FROM sessions WHERE token=?', token);
   if (!s) return null;
-  if (s.expires_at < Date.now()) { q.run('DELETE FROM sessions WHERE token=?', token); return null; }
-  return q.get('SELECT id,email,name,role,teacher_id,invite_code,feedback_tone,created_at FROM users WHERE id=?', s.user_id);
+  if (s.expires_at < Date.now()) { await q.run('DELETE FROM sessions WHERE token=?', token); return null; }
+  return (await q.get('SELECT id,email,name,role,teacher_id,invite_code,feedback_tone,created_at FROM users WHERE id=?', s.user_id)) ?? null;
 }
-export const sessionCookie = (token, maxAge = 30 * 86400) =>
-  `sid=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+export const sessionCookie = (token, maxAge = 30 * 86400, secure = true) =>
+  `sid=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 
-export function requireRole(user, role) {
-  if (!user) throw new HttpError(401, 'Tizimga kiring');
-  if (role && user.role !== role) throw new HttpError(403, "Bu amal uchun ruxsat yo'q");
-}
-export function newInviteCode() {
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
-}
+export const newInviteCode = () => hex(rand(4)).toUpperCase();
 
-// Tiny in-memory limiter for expensive AI endpoints.
+// Best-effort per-isolate limiter for expensive AI endpoints (not a hard global limit).
 const hits = new Map();
 export function rateLimit(userId, key, max, windowMs = 60000) {
   const k = key + ':' + userId, now = Date.now();

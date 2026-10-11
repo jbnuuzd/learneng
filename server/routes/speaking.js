@@ -14,12 +14,12 @@ const TTS_STYLE = { emma: 'Say warmly and gently', victor: 'Say in a stern, impa
 const MAX_TURNS = 40;
 const SCENARIOS = ['At a restaurant', 'At the airport check-in', 'At the doctor\'s', 'Buying clothes in a shop', 'Checking in at a hotel', 'Asking for directions in a new city', 'Returning a faulty product'];
 
-export function studiedUnits(userId) {
-  return q.all("SELECT DISTINCT ref_json FROM tasks WHERE user_id=? AND type='grammar' AND status='done'", userId)
-    .map((r) => unj(r.ref_json, {}).unit).filter((u) => unitById[u]);
+export async function studiedUnits(userId) {
+  const rows = await q.all("SELECT DISTINCT ref_json FROM tasks WHERE user_id=? AND type='grammar' AND status='done'", userId);
+  return [...new Set(rows.map((r) => unj(r.ref_json, {}).unit).filter((u) => unitById[u]))];
 }
-export function autoLevel(userId) {
-  const ab = abilities(userId);
+export async function autoLevel(userId) {
+  const ab = await abilities(userId);
   const sp = ab.speaking ?? ab.grammar ?? 40, gr = ab.grammar ?? sp;
   return toCefr(0.5 * sp + 0.5 * gr);
 }
@@ -67,8 +67,8 @@ Return JSON: {"transcript":"what the learner said","reply":"your next line in ch
 }
 const studiedNames = (s) => (s.studied || []).map((id) => unitById[id]?.title).filter(Boolean);
 
-function load(userId, id) {
-  const row = q.get('SELECT * FROM speaking_sessions WHERE id=? AND user_id=?', Number(id), userId);
+async function load(userId, id) {
+  const row = await q.get('SELECT * FROM speaking_sessions WHERE id=? AND user_id=?', Number(id), userId);
   if (!row) throw new HttpError(404, 'Sessiya topilmadi');
   const meta = unj(row.topic) && typeof unj(row.topic) === 'object' ? unj(row.topic) : { topic: row.topic };
   return { row, s: { id: row.id, persona: row.persona, level: row.level, mode: row.mode, topic: meta.topic ?? null, unit: meta.unit ?? null, studied: meta.studied ?? [] }, turns: unj(row.turns_json, []) };
@@ -88,15 +88,15 @@ export function registerSpeaking(r) {
     if (!persona) throw bad('Ustozni tanlang');
     const mode = speakingModes.some((m) => m.id === body.mode) ? body.mode : 'free';
     const lv = String(body.level || 'auto').toUpperCase();
-    const level = LEVELS.includes(lv) ? lv : autoLevel(user.id);
-    const studied = studiedUnits(user.id);
+    const level = LEVELS.includes(lv) ? lv : await autoLevel(user.id);
+    const studied = await studiedUnits(user.id);
     let unit = null;
     if (mode === 'grammar') {
       unit = unitById[body.unit] && studied.includes(body.unit) ? body.unit : studied[studied.length - 1] || null;
     }
     const topic = String(body.topic || '').trim().slice(0, 120) || null;
     const meta = { topic, unit, studied: studied.slice(-6) };
-    const id = q.run('INSERT INTO speaking_sessions(user_id,persona,level,mode,topic) VALUES(?,?,?,?,?)', user.id, persona, level, mode, j(meta)).lastInsertRowid;
+    const id = (await q.run('INSERT INTO speaking_sessions(user_id,persona,level,mode,topic) VALUES(?,?,?,?,?)', user.id, persona, level, mode, j(meta))).lastInsertRowid;
     const s = { id, persona, level, mode, topic, unit, studied: meta.studied };
     let text;
     if (aiEnabled()) {
@@ -107,13 +107,13 @@ export function registerSpeaking(r) {
       const list = fallbackQs[mode] || fallbackQs.free;
       text = `Hello, I'm ${personaById[persona].name}. ${list[0]}`;
     }
-    saveTurns(id, [{ role: 'ai', text }]);
-    const row = q.get('SELECT * FROM speaking_sessions WHERE id=?', id);
+    await saveTurns(id, [{ role: 'ai', text }]);
+    const row = await q.get('SELECT * FROM speaking_sessions WHERE id=?', id);
     return { ...sessionView(row, [{ role: 'ai', text }]), ai: aiEnabled() };
   }, { role: 'student' });
 
   r.post('/api/speaking/:id/turn', async ({ user, params, body }) => {
-    const { row, s, turns } = load(user.id, params.id);
+    const { row, s, turns } = await load(user.id, params.id);
     if (row.status !== 'open') throw bad('Sessiya yakunlangan');
     if (turns.length >= MAX_TURNS * 2) throw bad('Sessiya uzunligi chegarasiga yetdi — yakunlang.');
     const wav = typeof body.wav === 'string' && body.wav.length ? body.wav : null;
@@ -133,16 +133,16 @@ export function registerSpeaking(r) {
     if (!out.reply) out.reply = 'Could you say a little more about that?';
     turns.push({ role: 'user', text: out.transcript, notes: out.notes, hint: out.hint });
     turns.push({ role: 'ai', text: out.reply });
-    saveTurns(row.id, turns);
+    await saveTurns(row.id, turns);
     return { transcript: out.transcript, reply: out.reply, audio: speakAudio(row.persona, out.reply), notes: out.notes, hint: out.hint, end: out.end, turns: turns.length / 2 | 0 };
   }, { role: 'student', limit: 20 * 1024 * 1024 });
 
   r.post('/api/speaking/:id/finish', async ({ user, params, date }) => {
-    const { row, s, turns } = load(user.id, params.id);
+    const { row, s, turns } = await load(user.id, params.id);
     if (row.report_json) return sessionView(row, turns);
     const learnerTurns = turns.filter((t) => t.role === 'user');
     if (!learnerTurns.length) throw bad('Hali javob bermadingiz');
-    const tone = effectiveTone(user.id, date);
+    const tone = await effectiveTone(user.id, date);
     const wc = learnerTurns.reduce((n, t) => n + t.text.split(/\s+/).filter(Boolean).length, 0);
     let report;
     if (aiEnabled()) {
@@ -163,26 +163,26 @@ Return JSON: {"cefr":"A1..C2","band":1..9,"criteria":{"fluency":n,"lexical":n,"g
         const band = clamp(Number(r2.band) || 5, 1, 9);
         report = { ai: true, tone, cefr, band, criteria: r2.criteria || null, summary: String(r2.summary || '').slice(0, 1500), strengths: (r2.strengths || []).slice(0, 5), weaknesses: (r2.weaknesses || []).slice(0, 5),
           mistakes: (r2.mistakes || []).slice(0, 8), goodPhrases: (r2.goodPhrases || []).slice(0, 4), recommendations: (r2.recommendations || []).slice(0, 5), vocabularySuggestions: (r2.vocabularySuggestions || []).slice(0, 6), turns: learnerTurns.length, words: wc };
-        applyEvidence(user.id, 'speaking', (cefrToAbility(cefr) + ieltsToAbility(band)) / 2, 0.15, date);
+        await applyEvidence(user.id, 'speaking', (cefrToAbility(cefr) + ieltsToAbility(band)) / 2, 0.15, date);
       } catch { /* fallthrough */ }
     }
     if (!report) {
       const notes = learnerTurns.flatMap((t) => t.notes || []);
       report = { ai: false, tone, cefr: null, band: null, summary: `Siz ${learnerTurns.length} marta javob berdingiz (jami ${wc} ta so'z). Batafsil AI-baholash uchun Gemini API kaliti kerak.`, strengths: [], weaknesses: [], mistakes: notes.slice(0, 8), goodPhrases: [], recommendations: ["Har kuni 10 daqiqa gapirib mashq qiling.", "Javoblaringizni kengaytiring: sabab va misol qo'shing."], vocabularySuggestions: [], turns: learnerTurns.length, words: wc };
     }
-    q.run("UPDATE speaking_sessions SET status='done', report_json=?, finished_at=datetime('now') WHERE id=?", j(report), row.id);
-    q.run('INSERT INTO attempts(user_id,task_id,stage_key,stage_type,skill,topic,score,detail_json,feedback,tone,ai) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+    await q.run("UPDATE speaking_sessions SET status='done', report_json=?, finished_at=datetime('now') WHERE id=?", j(report), row.id);
+    await q.run('INSERT INTO attempts(user_id,task_id,stage_key,stage_type,skill,topic,score,detail_json,feedback,tone,ai) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
       user.id, null, `trainer:speaking:${row.id}`, 'speak', 'speaking', s.mode, report.band ? report.band / 9 : null, j({ extra: { cefr: report.cefr, band: report.band } }), report.summary, tone, report.ai ? 1 : 0);
-    const fresh = q.get('SELECT * FROM speaking_sessions WHERE id=?', row.id);
+    const fresh = await q.get('SELECT * FROM speaking_sessions WHERE id=?', row.id);
     return sessionView(fresh, turns);
   }, { role: 'student' });
 
-  r.get('/api/speaking/:id', ({ user, params }) => { const { row, turns } = load(user.id, params.id); return sessionView(row, turns); }, { role: 'student' });
+  r.get('/api/speaking/:id', async ({ user, params }) => { const { row, turns } = await load(user.id, params.id); return sessionView(row, turns); }, { role: 'student' });
 
-  r.get('/api/speaking', ({ user }) => {
-    const rows = q.all('SELECT id, persona, level, mode, status, report_json, created_at FROM speaking_sessions WHERE user_id=? ORDER BY id DESC LIMIT 30', user.id);
+  r.get('/api/speaking', async ({ user }) => {
+    const rows = await q.all('SELECT id, persona, level, mode, status, report_json, created_at FROM speaking_sessions WHERE user_id=? ORDER BY id DESC LIMIT 30', user.id);
     return rows.map((x) => { const rep = unj(x.report_json); return { id: x.id, persona: personaById[x.persona]?.name, emoji: personaById[x.persona]?.emoji, level: x.level, mode: x.mode, status: x.status, cefr: rep?.cefr ?? null, band: rep?.band ?? null, created: x.created_at }; });
   }, { role: 'student' });
 
-  r.get('/api/speaking/options/units', ({ user }) => studiedUnits(user.id).map((id) => ({ id, title: unitById[id].title })), { role: 'student' });
+  r.get('/api/speaking/options/units', async ({ user }) => (await studiedUnits(user.id)).map((id) => ({ id, title: unitById[id].title })), { role: 'student' });
 }

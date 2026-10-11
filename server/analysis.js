@@ -17,10 +17,10 @@ export const vocabForAbility = (a) => Math.round(interp(VOCAB_PTS, a));
 const RETENTION = 0.6;   // share of newly met words that stays active after spaced forgetting
 
 export async function analyseGoal(userId, today) {
-  const goal = q.get('SELECT * FROM goals WHERE user_id=?', userId);
-  const plan = activePlan(userId);
+  const goal = await q.get('SELECT * FROM goals WHERE user_id=?', userId);
+  const plan = await activePlan(userId);
   if (!goal || !plan) return { ready: false, reason: 'Avval maqsad belgilang va traektoriya yarating.' };
-  const ab = abilities(userId);
+  const ab = await abilities(userId);
   const cur = overall(ab);
   if (cur == null) return { ready: false, reason: 'Avval diagnostik testni topshiring.' };
   const target = goalAbility(goal);
@@ -29,13 +29,13 @@ export async function analyseGoal(userId, today) {
   const daysLeft = Math.max(0, diffDays(today, goal.deadline));
 
   // adherence so far
-  const past = q.get("SELECT SUM(minutes) planned, SUM(CASE WHEN status='done' THEN minutes ELSE 0 END) done, COUNT(*) n, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) nd FROM tasks WHERE user_id=? AND date<?", userId, today);
+  const past = await q.get("SELECT SUM(minutes) planned, SUM(CASE WHEN status='done' THEN minutes ELSE 0 END) done, COUNT(*) n, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) nd FROM tasks WHERE user_id=? AND date<?", userId, today);
   const adherence = past.n >= 5 ? clamp(past.done / Math.max(past.planned, 1), 0.2, 1) : 0.8;
-  const fut = q.get("SELECT SUM(minutes) m, COUNT(*) n FROM tasks WHERE user_id=? AND date>=? AND status!='done'", userId, today);
+  const fut = await q.get("SELECT SUM(minutes) m, COUNT(*) n FROM tasks WHERE user_id=? AND date>=? AND status!='done'", userId, today);
   const futureHours = (fut.m || 0) / 60;
   const futureEffective = futureHours * adherence;
-  const learnedWords = q.get('SELECT COUNT(*) n FROM learned_words WHERE user_id=?', userId).n;
-  const futureNewWords = q.get("SELECT COUNT(*) n FROM tasks WHERE user_id=? AND type='vocab' AND date>=? AND status!='done'", userId, today).n * NEW_WORDS_PER_DAY;
+  const learnedWords = (await q.get('SELECT COUNT(*) n FROM learned_words WHERE user_id=?', userId)).n;
+  const futureNewWords = (await q.get("SELECT COUNT(*) n FROM tasks WHERE user_id=? AND type='vocab' AND date>=? AND status!='done'", userId, today)).n * NEW_WORDS_PER_DAY;
 
   // hours model
   const gapPoints = Math.max(0, target - cur);
@@ -54,7 +54,8 @@ export async function analyseGoal(userId, today) {
   const ci = levelIndex(toCefr(cur)), ti = levelIndex(goal.target_cefr);
   const neededUnits = units.filter((u) => levelIndex(u.level) >= ci && levelIndex(u.level) <= ti);
   const scheduledUnits = new Set((plan.meta.units || []));
-  const grammarCoverage = neededUnits.length ? neededUnits.filter((u) => scheduledUnits.has(u.id) || q.get("SELECT 1 FROM tasks WHERE user_id=? AND type='grammar' AND status='done' AND ref_json LIKE ?", userId, `%"${u.id}"%`)).length / neededUnits.length : 1;
+  const doneUnits = new Set((await q.all("SELECT ref_json FROM tasks WHERE user_id=? AND type='grammar' AND status='done'", userId)).map((r) => unj(r.ref_json, {}).unit));
+  const grammarCoverage = neededUnits.length ? neededUnits.filter((u) => scheduledUnits.has(u.id) || doneUnits.has(u.id)).length / neededUnits.length : 1;
 
   const predicted = clamp(0.65 * (cur + gainByHours) + 0.35 * Math.max(cur, Math.min(cur + gainByHours, vocabLimitedAbility + 8)), 0, 100);
   const shortfallHours = Math.max(0, requiredHours - futureEffective);
@@ -63,9 +64,10 @@ export async function analyseGoal(userId, today) {
   const neededHoursPerDay = daysLeft ? Math.ceil((requiredHours / (daysLeft * adherence)) * 2) / 2 : null;
 
   // skill table
+  const plannedBy = Object.fromEntries((await q.all("SELECT type, SUM(minutes) m FROM tasks WHERE user_id=? AND date>=? AND status!='done' GROUP BY type", userId, today)).map((r) => [r.type, r.m || 0]));
   const skills = SKILLS.map((s) => {
     const a = ab[s], t = target;
-    const planned = q.get("SELECT SUM(minutes) m FROM tasks WHERE user_id=? AND date>=? AND status!='done' AND type=?", userId, today, s === 'vocab' ? 'vocab' : s).m || 0;
+    const planned = plannedBy[s] || 0;
     return { skill: s, name: SKILL_UZ[s], current: a == null ? null : describe(a), gap: a == null ? null : Math.round(Math.max(0, t - a)), plannedHours: Math.round(planned / 6) / 10 };
   });
 
@@ -92,14 +94,14 @@ export async function analyseGoal(userId, today) {
   // AI narrative (cached per day + plan + metric fingerprint)
   const fp = hashStr(JSON.stringify([metrics.chance, metrics.hours, metrics.vocabulary.projected, metrics.skills.map((s) => s.current?.ability)]));
   const key = `analysis:${userId}:${today}:${fp}`;
-  let narrative = cacheGet(key);
+  let narrative = await cacheGet(key);
   if (!narrative && aiEnabled()) {
     try {
       narrative = await generateJSON(`You are a senior IELTS/CEFR study-planning advisor. Based ONLY on these computed metrics, judge whether the learner can reach the goal and advise concretely.
 Be honest: do not promise results; if the goal is unrealistic say so and propose a realistic alternative (longer deadline, higher daily hours, intermediate milestone). Mention the 50-new-words-per-day requirement and whether retention is a risk.
 Write in simple Uzbek (Latin). Return JSON: {"verdict":"realistic|stretch|unrealistic","summary":"3-5 sentences","risks":["..." max 4],"actions":["concrete, measurable step" max 6],"skillPriorities":[{"skill":"grammar|vocab|reading|listening|writing|speaking","why":"short","minutesPerDay":n}]}
 Metrics: ${JSON.stringify(metrics)}`, { temperature: 0.3 });
-      narrative.ai = true; cacheSet(key, 'analysis', narrative);
+      narrative.ai = true; await cacheSet(key, 'analysis', narrative);
     } catch { narrative = null; }
   }
   if (!narrative) narrative = fallbackNarrative(metrics);
