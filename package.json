@@ -1,0 +1,12 @@
+{
+  "name": "ilmiy-yuksalish",
+  "version": "1.0.0",
+  "description": "Ilmiy yuksalish — tadqiqotchilar uchun tavsiyaviy platforma (Scopus, OAK, impakt faktor, konferensiyalar, shaxsiy trayektoriya)",
+  "main": "server.js",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "test": "node --no-warnings --test test/*.test.js"
+  },
+  "license": "MIT"
+}
