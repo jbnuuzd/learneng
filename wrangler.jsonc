@@ -11,7 +11,7 @@
     "run_worker_first": ["/api/*"]
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "learneng", "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "learneng", "database_id": "11bb279b-4b05-4890-9805-8849da9bdaa0", "migrations_dir": "migrations" }
   ],
   "r2_buckets": [
     { "binding": "FILES", "bucket_name": "learneng-files" }
