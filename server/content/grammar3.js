@@ -84,7 +84,7 @@ export default [
       { q: 'It is hard for me to wake up early. (rewrite: I find …)', a: ['I find it hard to wake up early.'] },
       { q: 'He said he would not help me. (use: refuse)', a: ['He refused to help me.'] },
     ],
-    match: [['enjoy', '-ing'], ['decide', 'to + V'], ['avoid', '-ing'], ['hope', 'to + V'], ['give up', '-ing']],
+    match: [['enjoy', '+ -ing'], ['decide', '+ to V'], ['stop (ended the activity)', 'stop + -ing'], ['stop (in order to)', 'stop + to V'], ['interested in', 'preposition + -ing']],
     tf: [
       { q: 'After prepositions we use the -ing form.', a: true },
       { q: '"I enjoy to read" is correct.', a: false },

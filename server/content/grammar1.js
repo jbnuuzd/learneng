@@ -146,7 +146,7 @@ export default [
       { q: 'We are studying. (negative)', a: ["We aren't studying.", 'We are not studying.', "We're not studying."] },
       { q: 'She is cooking. (question)', a: ['Is she cooking?'] },
     ],
-    match: [['now', 'Continuous'], ['every day', 'Simple'], ['at the moment', 'Continuous'], ['usually', 'Simple'], ['this week', 'Continuous']],
+    match: [['now / at the moment', 'happening at this moment'], ['every day / usually', 'habit or routine'], ['know, like, want', 'state verbs: no -ing'], ['make → ?', 'making'], ['run → ?', 'running']],
     tf: [
       { q: '"I am knowing him" is correct.', a: false },
       { q: '"She is running" has a double n: runing.', a: false },

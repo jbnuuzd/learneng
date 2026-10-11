@@ -87,7 +87,7 @@ function grammarStages(task, unit, mode) {
       out.push(textStage('transform', 'Gapni qayta yozing', min, 'transform', pick(unit.transform), { ...base, instructions: "Qavs ichidagi ko'rsatmaga amal qilib, butun gapni yozing." }));
     } else if (k === 'match') {
       const pairs = unit.match;
-      const right = shuffle(pairs.map((p) => p[1]), `${seed}:m`);
+      const right = shuffle([...new Set(pairs.map((p) => p[1]))], `${seed}:m`);   // unique options: several pairs may share an answer
       out.push({ key: 'match', title: 'Juftliklarni moslashtiring', minutes: min, ...base, grade: 'match',
         keyData: pairs.map((p) => right.indexOf(p[1])), ctx: pairs.map((p) => ({ q: p[0], right })),
         pub: { type: 'match', instructions: "Chap ustundagi har bir elementga mos javobni tanlang.", left: pairs.map((p) => p[0]), right } });

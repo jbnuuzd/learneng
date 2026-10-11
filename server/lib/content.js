@@ -2,6 +2,7 @@
 import g1 from '../content/grammar1.js';
 import g2 from '../content/grammar2.js';
 import g3 from '../content/grammar3.js';
+import g4 from '../content/grammar4.js';
 import { topics as seedTopics, general as seedGeneral } from '../content/vocab.js';
 import { readingPool, listeningPool, writingPool, speakingPool } from '../content/pools.js';
 import { q, j, unj } from './db.js';
@@ -10,7 +11,11 @@ import { generateVocab, generateReading, generateListening, generatePrompt } fro
 import { levelIndex, LEVELS } from './scale.js';
 import { hashStr } from './rng.js';
 
-export const units = [...g1, ...g2, ...g3].map((u, i) => ({ ...u, order: i }));
+// curriculum order: by CEFR level, then authoring order (so B1 lessons added later still come before B2/C1)
+export const units = [...g1, ...g2, ...g3, ...g4]
+  .map((u, i) => ({ u, i }))
+  .sort((a, b) => levelIndex(a.u.level) - levelIndex(b.u.level) || a.i - b.i)
+  .map(({ u }, order) => ({ ...u, order }));
 export const unitById = Object.fromEntries(units.map((u) => [u.id, u]));
 
 // IELTS-style topic catalogue. Seed topics ship with 40 words; the rest are generated (and cached) with Gemini.

@@ -76,7 +76,9 @@ node scripts/smoke.mjs http://localhost:8787
 lug'at kuni (40 ta IELTS mavzu so'zi + 12 ta kundalik) → reading/listening/speaking trenajyorlari (AI yangi material, internetdan qidirish,
 BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq, tavsiya) → progress va «maqsadga erishish mumkinmi» tahlili.
 
-**O'qituvchi:** o'quvchilar ro'yxati va ogohlantirishlar, fikr-mulohaza uslubi (pozitiv/neytral/qat'iy — standart yoki aniq kun uchun),
+**Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
+
+**O'qituvchi:** o'quvchilar ro'yxati va ogohlantirishlar, parolni tiklash, CSV eksport, fikr-mulohaza uslubi (pozitiv/neytral/qat'iy — standart yoki aniq kun uchun),
 qo'shimcha topshiriq, zaif mavzu bo'yicha takrorlash, rejani qayta tuzish, kitob/PDF/audio yuklash, izohlar, lug'at bazasini to'ldirish.
 
 ## Kontent va mualliflik huquqi
@@ -97,6 +99,6 @@ BBC kontenti ko'chirilmaydi: havola beriladi, transkriptni joylab AI orqali savo
   `wrangler.jsonc` → `vars` da (`GEMINI_TEXT_MODEL`, `GEMINI_TTS_MODEL`), Google nomni o'zgartirsa shu yerda yangilang.
 - Tezlik cheklovi (`rateLimit`) har Worker nusxasida alohida (xotirada) — qat'iy global limit emas.
 - CEFR/IELTS baholari taxminiy; IELTS natijasini kafolatlamaydi. «Erishish ehtimoli» konservativ ichki model (~200 soat/daraja, eslab qolish ~60%).
-- Dastlabki kontent: 18 grammatika darsi (A1–C1), 8 mavzu × 40 so'z, 125 kundalik so'z. Oylab har kuni yangi so'zlar uchun Gemini kaliti kerak.
+- Dastlabki kontent: 26 grammatika darsi (A1–C1), 8 mavzu × 40 so'z, 125 kundalik so'z. Oylab har kuni yangi so'zlar uchun Gemini kaliti kerak.
 - Maxfiylik: o'quvchi javoblari va audio Gemini'ga yuboriladi; audio saqlanmaydi (faqat natija va matn). O'quvchilarni xabardor qiling.
 - Mikrofon faqat HTTPS (yoki localhost) da ishlaydi — `workers.dev` HTTPS beradi.
