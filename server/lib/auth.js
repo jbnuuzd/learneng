@@ -1,8 +1,9 @@
 import { q } from './db.js';
 import { HttpError } from './http.js';
+import { getEnv } from './env.js';
 
 const DAY = 86400000;
-const ITER = 100000;                                  // Workers' PBKDF2 maximum
+const iterations = () => Math.min(100000, Math.max(1000, Number(getEnv().PBKDF2_ITERATIONS) || 100000));   // 100000 = Workers' maximum; lower only if the free plan's CPU limit trips
 const enc = new TextEncoder();
 const hex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
 const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
@@ -15,7 +16,8 @@ async function derive(pw, salt, iter) {
 }
 export async function hashPassword(pw) {
   const salt = rand(16);
-  return `pbkdf2$${ITER}$${hex(salt)}$${hex(await derive(pw, salt, ITER))}`;
+  const it = iterations();
+  return `pbkdf2$${it}$${hex(salt)}$${hex(await derive(pw, salt, it))}`;
 }
 export async function verifyPassword(pw, stored) {
   const [alg, iter, salt, hash] = stored.split('$');

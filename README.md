@@ -12,12 +12,13 @@ Virtual speaking trenajyor (10 xil AI ustoz), reading/listening trenajyorlari, o
 | Sayt (HTML/JS/CSS, `public/`) | **Workers Static Assets** |
 | API (`server/worker.js`, `/api/*`) | **Worker** |
 | Ma'lumotlar bazasi (foydalanuvchilar, reja, natijalar) | **D1** (SQLite) — sxema `migrations/0001_init.sql` |
-| O'qituvchi yuklagan fayllar va TTS audio keshi | **R2** |
+| O'qituvchi yuklagan fayllar va TTS audio keshi | **D1 + Workers cache** (bepul) yoki ixtiyoriy **R2** |
 | `GEMINI_API_KEY`, `TEACHER_SIGNUP_CODE` | **Secrets** |
 
 ## Joylashtirish (deploy) — qadamma-qadam
 
-Kerak: Cloudflare akkaunti (**R2 ni yoqish uchun to'lov kartasi** talab qilinadi, bepul limit doirasida pul yechilmaydi), Node.js 20+.
+Kerak: bepul Cloudflare akkaunti, Node.js 20+. **R2 shart emas**: u bo'lmasa fayllar D1 da (maks. 8 MB), audio keshi Workers cache da saqlanadi — karta kerak emas.
+R2 xohlasangiz: `wrangler.jsonc` dagi izohli `r2_buckets` qatorini oching va bucket yarating (maks. 25 MB fayllar, doimiy audio keshi).
 
 ```bash
 git clone https://github.com/jbnuuzd/learneng.git && cd learneng
@@ -27,7 +28,7 @@ npx wrangler login                                  # brauzerda Cloudflare'ga ki
 
 npx wrangler d1 create learneng                     # chiqqan database_id ni nusxalang
 #   → wrangler.jsonc ichida "REPLACE_WITH_YOUR_D1_DATABASE_ID" o'rniga qo'ying
-npx wrangler r2 bucket create learneng-files        # fayllar uchun bucket
+# (ixtiyoriy) npx wrangler r2 bucket create learneng-files
 npm run migrate:remote                              # jadvallarni D1 da yaratadi
 
 npx wrangler secret put GEMINI_API_KEY              # so'raganda API kalitni kiriting
@@ -86,6 +87,7 @@ BBC kontenti ko'chirilmaydi: havola beriladi, transkriptni joylab AI orqali savo
 
 ## Cheklovlar va halol eslatmalar
 
+- **Bepul rejada «Error 1102 / exceeded CPU» chiqsa**: `PBKDF2_ITERATIONS` o'zgaruvchisini (Variables, Text) `20000` ga tushiring (parol xeshi yengillashadi, xavfsizlik biroz pasayadi), yoki Workers Paid ga o'ting.
 - **Workers Free rejasi yetmasligi mumkin.** Free rejada har so'rovga ~10 ms CPU va 50 ta kichik so'rov (D1 so'rovlari ham) limiti bor;
   reja yaratish, parol xeshlash (PBKDF2) va o'qituvchi paneli bundan oshishi mumkin. **Workers Paid (~$5/oy) tavsiya etiladi.**
   Men lokal `workerd` da sinadim, Cloudflare'ning real limitlarida sinab ko'rmadim.

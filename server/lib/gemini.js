@@ -138,8 +138,12 @@ const plainText = (t) => t.replace(/^TTS the following conversation between .*?:
 export async function ttsAudio(id) {
   const files = getEnv().FILES;
   const key = `tts/${id}.wav`;
-  const hit = files && (await files.get(key));
+  const cacheKey = new Request(`https://tts-cache.invalid/${id}`);
+  const edge = typeof caches !== 'undefined' ? caches.default : null;   // free fallback when no R2 bucket is bound
+  const hit = files ? await files.get(key) : null;
   if (hit) return { body: hit.body, size: hit.size };
+  const cached = !files && edge ? await edge.match(cacheKey) : null;
+  if (cached) { const buf = new Uint8Array(await cached.arrayBuffer()); return { body: buf, size: buf.length }; }
   const row = await q.get('SELECT json FROM tts_registry WHERE id=?', id);
   if (!row) return null;
   const entry = JSON.parse(row.json);
@@ -147,6 +151,7 @@ export async function ttsAudio(id) {
   try {
     const wav = await synthesize(entry.text, entry);
     if (files) await files.put(key, wav, { httpMetadata: { contentType: 'audio/wav' } });
+    else if (edge) await edge.put(cacheKey, new Response(wav, { headers: { 'content-type': 'audio/wav', 'cache-control': 'public, max-age=2592000' } }));
     return { body: wav, size: wav.length };
   } catch {
     return { fallback: true, text: plainText(entry.text), voice: entry.voice };

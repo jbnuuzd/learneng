@@ -13,9 +13,9 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "learneng", "database_id": "11bb279b-4b05-4890-9805-8849da9bdaa0", "migrations_dir": "migrations" }
   ],
-  "r2_buckets": [
-    { "binding": "FILES", "bucket_name": "learneng-files" }
-  ],
+  // Optional (needs a card on file): add an R2 bucket for big files / audio cache, then redeploy:
+  //   "r2_buckets": [{ "binding": "FILES", "bucket_name": "learneng-files" }],
+  // Without it, uploads (max 8 MB) are stored in D1 and TTS audio in the Workers cache.
   "vars": {
     "GEMINI_TEXT_MODEL": "gemini-2.5-flash",
     "GEMINI_TTS_MODEL": "gemini-2.5-flash-preview-tts"

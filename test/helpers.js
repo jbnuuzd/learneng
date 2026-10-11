@@ -4,8 +4,10 @@ import { createD1, createR2 } from './shims.js';
 
 // Boots the real Worker (server/worker.js) behind a tiny Node http adapter, with in-memory D1 + R2 doubles.
 export async function boot(vars = {}) {
-  const schema = fs.readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8');
+  const dir = new URL('../migrations/', import.meta.url);
+  const schema = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort().map((f) => fs.readFileSync(new URL(f, dir), 'utf8')).join('\n');
   const env = { DB: createD1(schema), FILES: createR2(), ...vars };
+  if (env.FILES === null) delete env.FILES;   // simulate a deployment without an R2 bucket
   const { setEnv } = await import('../server/lib/env.js');
   setEnv(env);
   const { default: worker } = await import('../server/worker.js');
