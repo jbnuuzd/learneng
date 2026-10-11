@@ -1,5 +1,5 @@
 // App-shell cache: the app opens offline (installable PWA); /api is never cached.
-const CACHE = 'learneng-shell-v4';
+const CACHE = 'learneng-shell-v5';
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/css/styles.css', '/js/main.js']).catch(() => {}))); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {

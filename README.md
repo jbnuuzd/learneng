@@ -80,6 +80,8 @@ BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq,
 
 **Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
 
+**Lingo bilan ovozli suhbat:** 🎤 tugmasini bosib gapiring, ■ ni bosganda yuboriladi (30 soniyagacha). Gemini gapingizni yozib oladi (inglizcha yoki o'zbekcha), Lingo javob beradi, xatoingizni tuzatadi va ovozda aytadi.
+
 **Lingo milliy kiyimda:** do'ppi va adras chopon kiygan. Sayt har ochilganda tepadan tushib, ta'zim qiladi, qo'l silkitadi va o'zbek tilida jonli ovozda «Xush kelibsiz, bilimdon! Bugun nimalarni o'rganamiz?» deydi, gapirganda raqsga tushadi va aylanadi. Brauzer ovozni bloklasa, «🔊 Lingo salomini eshiting» tugmasi chiqadi (yoki sahifadagi birinchi bosishda o'zi aytadi).
 
 **Lingo (boyqush):** bosh sahifada animatsiyali personaj — ko'zlari kursorga qaraydi, ko'z qisadi, qanot silkitadi, gapirganda tumshug'i harakatlanadi. U bilan yozib suhbatlashasiz (inglizcha/o'zbekcha): oddiy inglizcha javob + o'zbekcha tarjima + xatolaringizni tuzatish + ovozli javob. Kalit bo'lmasa tayyor oddiy javoblar beradi.

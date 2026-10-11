@@ -232,3 +232,4 @@ table.t tbody tr { transition: background .12s; } table.t tbody tr:hover { backg
 @keyframes m-spin { to { transform: rotateY(360deg); } }
 .say-play { margin: 0 0 10px; animation: pulse2 1.4s infinite; }
 @keyframes pulse2 { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand) 22%, transparent); } }
+.mic-sm.rec { background: var(--bad); color: #fff; border-color: var(--bad); animation: pulse 1.1s infinite; }

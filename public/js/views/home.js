@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { h, fmtDate, fmtMin, bar, TYPE_ICON, toneBadge, levelCard, toast, mount } from '../ui.js';
 import { state, go } from '../state.js';
 import { createMascot } from '../mascot.js';
-import { playAudio, stopAudio } from '../audio.js';
+import { playAudio, stopAudio, Recorder } from '../audio.js';
 
 export function taskRow(t, { date } = {}) {
   return h('a', { class: 'task' + (t.status === 'done' ? ' done' : ''), href: '#/task/' + t.id },
@@ -22,21 +22,38 @@ function buddyCard(name, st) {
   const log = h('div', { class: 'log' }); log.hidden = true;
   const input = h('input', { type: 'text', placeholder: 'Lingo ga yozing (inglizcha yoki o\'zbekcha)…', maxlength: 500, 'aria-label': 'Lingo ga xabar' });
   const history = []; let busy = false, muted = false;
-  const logAdd = (role, text) => { log.hidden = false; log.append(h('div', { class: 'bubble' + (role === 'me' ? ' me' : '') }, text)); log.scrollTop = log.scrollHeight; };
-  async function send(text) {
-    text = (text || '').trim(); if (!text || busy) return;
+  const logAdd = (role, text) => { log.hidden = false; const b = h('div', { class: 'bubble' + (role === 'me' ? ' me' : '') }, text); log.append(b); log.scrollTop = log.scrollHeight; return b; };
+  async function send(text, wav) {
+    text = (text || '').trim(); if ((!text && !wav) || busy) return;
     busy = true; input.value = ''; stopAudio(); m.talk(false); m.think(true);
-    logAdd('me', text); history.push({ role: 'me', text });
+    const meBubble = logAdd('me', wav ? '🎤 …' : text); if (!wav) history.push({ role: 'me', text });
     mount(say, h('span', { class: 'typing' }, h('i'), h('i'), h('i')));
     try {
-      const r = await api.post('/api/buddy/chat', { message: text, history: history.slice(-8) });
+      const r = await api.post('/api/buddy/chat', wav ? { wav, history: history.slice(-8) } : { message: text, history: history.slice(-8) });
+      if (wav) { meBubble.textContent = '🎤 ' + (r.transcript || '…'); history.push({ role: 'me', text: r.transcript || '' }); }
       m.think(false); history.push({ role: 'ai', text: r.reply }); logAdd('ai', r.reply); showSay(r.reply, r.uz, r.fix); m.cheer();
       if (!muted) { m.talk(true); playAudio(r.audio).catch(() => {}).finally(() => m.talk(false)); }
-    } catch (e) { m.think(false); showSay('Oops… ' + e.message); }
+    } catch (e) { m.think(false); if (wav) meBubble.remove(); showSay('Oops… ' + e.message); }
     busy = false; input.focus();
   }
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(input.value); });
   const speaker = h('button', { class: 'btn secondary sm', type: 'button', title: 'Ovozni yoqish/o\'chirish', 'aria-label': 'Ovoz', onclick: () => { muted = !muted; speaker.textContent = muted ? '🔇' : '🔊'; if (muted) { stopAudio(); m.talk(false); } } }, '🔊');
+  // ---- microphone: tap to speak, tap again to send (auto-stops after 30 s)
+  let rec = null, recTimer = null;
+  const mic = h('button', { class: 'btn secondary sm mic-sm', type: 'button', title: 'Lingo ga gapiring', 'aria-label': 'Mikrofon', disabled: !Recorder.supported() || undefined }, '🎤');
+  async function stopMic() {
+    clearTimeout(recTimer); const r = rec; rec = null; mic.classList.remove('rec'); mic.textContent = '🎤'; m.think(false);
+    try { const d = await r.stop(); if (d.seconds < 1) { showSay('Juda qisqa bo\'ldi. Yana urinib ko\'ring 🙂'); return; } await send('', d.base64); } catch { toast("Yozuvni qayta ishlab bo'lmadi", true); }
+  }
+  mic.onclick = async () => {
+    if (rec) return stopMic();
+    if (busy) return;
+    try {
+      stopAudio(); m.talk(false); m.dance(false); rec = new Recorder(); await rec.start();
+      mic.classList.add('rec'); mic.textContent = '■'; m.think(true); showSay('Eshitaman… gapiring, tugatgach ■ ni bosing 🎧');
+      recTimer = setTimeout(stopMic, 30000);
+    } catch { rec = null; mic.classList.remove('rec'); toast('Mikrofonga ruxsat berilmadi', true); }
+  };
   const sugg = ['Hello Lingo!', 'Give me a tip for IELTS speaking', 'Explain Present Perfect simply', 'Ask me a question'].map((s) => h('button', { class: 'pill', type: 'button', onclick: () => send(s) }, s));
   // ---- welcome show: Lingo drops in, bows, waves, dances and says the greeting aloud (Uzbek)
   const playBtn = h('button', { class: 'btn sm say-play', type: 'button' }, '🔊 Lingo salomini eshiting');
@@ -63,7 +80,7 @@ function buddyCard(name, st) {
   m.el.addEventListener('click', () => { m.wave(); m.cheer(); });
   m.el.style.cursor = 'pointer';
   return h('div', { class: 'card buddy' }, m.el,
-    h('div', {}, say, playBtn, log, h('div', { class: 'sugg' }, sugg), h('div', { class: 'composer' }, input, speaker, h('button', { class: 'btn', type: 'button', onclick: () => send(input.value) }, 'Yuborish'))));
+    h('div', {}, say, playBtn, log, h('div', { class: 'sugg' }, sugg), h('div', { class: 'composer' }, input, mic, speaker, h('button', { class: 'btn', type: 'button', onclick: () => send(input.value) }, 'Yuborish'))));
 }
 
 export async function homeView() {

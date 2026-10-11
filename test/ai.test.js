@@ -30,6 +30,7 @@ function reply(body) {
   if (text.includes('listening script')) return json({ title: 'Fake Dialogue', speakers: ['Anna', 'Tom'], lines: [['Anna', 'Hello Tom, how are you today?'], ['Tom', 'I am fine, thank you very much.']], questions: READING.questions });
   if (text.includes('vocabulary items')) { const tag = /topic "([^"]+)"/.exec(text)?.[1]?.slice(0, 5).replace(/\W/g, '') || 'x'; return json({ words: WORDS(40, tag) }); }
   if (text.includes('writing task') || text.includes('speaking task')) return json({ prompt: 'GEN PROMPT about environment', minWords: 80, maxWords: 120, seconds: 45 });
+  if (text.includes("The audio is the learner's new message")) return json({ transcript: 'I am agree with you', reply: 'Good try! Say: I agree with you.', uz: "Yaxshi urinish! «I agree with you» deng.", fix: 'I am agree → I agree' });
   if (text.includes("Learner's new message")) return json({ reply: 'Hi! I am fine. And you?', uz: 'Salom! Yaxshiman. Siz-chi?', fix: 'I am agree → I agree' });
   if (text.includes('Conversation so far')) return json({ transcript: 'I like football.', reply: 'Nice! Why do you like it?', notes: [{ original: 'I like football very much', corrected: 'I really like football', why: 'ravish' }], hint: '', end: false });
   if (text.includes('Begin the session now')) return plain('Hello! I am your partner. What is your name?');
@@ -227,4 +228,12 @@ test('Lingo welcome: fixed Uzbek greeting with its own audio id (cached for ever
   const a = await student.get('/api/tts/' + r.data.audio); assert.equal(a.status, 200);
   const call = seen.filter((s) => s.body.generationConfig?.responseModalities).at(-1);
   assert.match(call.body.contents[0].parts[0].text, /Uzbek.*Xush kelibsiz/);
+});
+
+test('Lingo voice chat: spoken message is transcribed by Gemini and answered', async () => {
+  const r = await student.post('/api/buddy/chat', { wav: Buffer.from('RIFFxxxxWAVE').toString('base64') });
+  assert.equal(r.status, 200); assert.equal(r.data.transcript, 'I am agree with you'); assert.match(r.data.reply, /agree/);
+  const call = seen.filter((s) => s.body.contents[0].parts[0].text.includes("The audio is the learner's new message")).at(-1);
+  assert.equal(call.body.contents[0].parts[1].inlineData.mimeType, 'audio/wav');
+  assert.equal((await student.post('/api/buddy/chat', { wav: 'A'.repeat(3.5 * 1024 * 1024) })).status, 400);
 });
