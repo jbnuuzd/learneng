@@ -309,3 +309,9 @@ test('teacher message reaches the student and can be marked read', async () => {
   assert.equal((await student.get('/api/messages')).data[0].read, 1);
   assert.equal((await student.post(`/api/teacher/students/${studentId}/message`, { text: 'hack' })).status, 403);
 });
+
+test('progress exposes achievements derived from stats', async () => {
+  const p = (await student.get('/api/progress')).data;
+  assert.ok(Array.isArray(p.badges) && p.badges.length >= 4);
+  assert.ok(p.badges.some((b) => !b.earned && typeof b.progress === 'number'), 'next goals are shown with progress');
+});

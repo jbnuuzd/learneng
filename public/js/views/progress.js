@@ -43,6 +43,7 @@ export async function progressView() {
   return h('div', {},
     h('h1', {}, 'Progress va tahlil'),
     h('div', { class: 'grid g4' }, levelCard('Umumiy daraja', p.overall), h('div', { class: 'card flat stat' }, h('b', {}, st.tasksDone), h('span', {}, 'bajarilgan topshiriq')), h('div', { class: 'card flat stat' }, h('b', {}, fmtMin(st.minutesDone)), h('span', {}, 'jami o\'qilgan')), h('div', { class: 'card flat stat' }, h('b', {}, st.completionRate != null ? st.completionRate + '%' : '—'), h('span', {}, 'reja bajarilishi'))),
+    p.badges?.length ? h('div', { class: 'card' }, h('h2', {}, '🏅 Yutuqlar'), h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } }, p.badges.map((b) => h('span', { class: 'badge ' + (b.earned ? 'ok' : ''), title: b.earned ? 'Qo\'lga kiritilgan' : `Keyingi maqsad: ${b.progress}%`, style: b.earned ? {} : { opacity: .55 } }, (b.earned ? '' : '🔒 ') + b.title + (b.earned ? '' : ` (${b.progress}%)`))))) : null,
     p.srs && p.srs.total ? h('div', { class: 'card' }, h('h2', {}, "🔁 So'z xotirasi"),
       h('div', { class: 'grid g4' }, [[p.srs.total, "o'rganilgan so'z"], [p.srs.due, 'bugun takrorlash kerak'], [p.srs.mastered, "mustahkam (14+ kun)"], [p.srs.accuracy != null ? p.srs.accuracy + '%' : '—', 'takrorlash aniqligi']].map(([v, t]) => h('div', { class: 'card flat stat' }, h('b', {}, v), h('span', {}, t)))),
       h('p', { class: 'muted' }, "Qutilar (1→3→7→14→30→60 kun): ", p.srs.boxes.map((n, i) => `${['1k', '3k', '7k', '14k', '30k', '60k'][i]}: ${n}`).join(' · '))) : null,

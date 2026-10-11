@@ -5,6 +5,7 @@ import { abilities, overall, history, currentLevel, SKILLS, SKILL_UZ } from '../
 import { toCefr, toIelts, ieltsToAbility, cefrToAbility, describe, LEVELS, goalAbility } from '../lib/scale.js';
 import { previewGoal, generatePlan, activePlan, weakTopics, NEW_WORDS_PER_DAY, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
+import { badgesFor } from '../lib/badges.js';
 import { analyseGoal } from '../analysis.js';
 import { ensureSrsTask, srsStats } from '../lib/srs.js';
 import { unitById } from '../lib/content.js';
@@ -58,10 +59,12 @@ export async function progressFor(userId, today) {
   const ab = await abilities(userId);
   const o = overall(ab);
   const recent = await q.all('SELECT id, task_id, stage_key, stage_type, skill, topic, score, feedback, tone, ai, created_at FROM attempts WHERE user_id=? ORDER BY id DESC LIMIT 15', userId);
+  const stats = await statsFor(userId, today);
   return {
+    badges: await badgesFor(userId, stats),
     overall: o == null ? null : describe(o),
     skills: SKILLS.map((s) => ({ skill: s, name: SKILL_UZ[s], ...(ab[s] != null ? describe(ab[s]) : { ability: null }) })),
-    srs: await srsStats(userId, today), history: await history(userId), stats: await statsFor(userId, today), weakTopics: (await weakTopics(userId)).map((id) => ({ id, title: unitById[id]?.title || id })), recent,
+    srs: await srsStats(userId, today), history: await history(userId), stats, weakTopics: (await weakTopics(userId)).map((id) => ({ id, title: unitById[id]?.title || id })), recent,
   };
 }
 
