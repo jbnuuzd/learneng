@@ -5,7 +5,7 @@ import { historyChart, analysisView } from './progress.js';
 import { reportView } from './trainers.js';
 import { bullets, corrections, criteriaBars } from '../components.js';
 
-const TABS = [['overview', 'Umumiy'], ['feedback', 'Fikr-mulohaza'], ['tasks', 'Topshiriqlar'], ['plan', 'Traektoriya'], ['progress', 'Progress'], ['analysis', 'AI tahlil'], ['materials', 'Materiallar'], ['notes', 'Izohlar']];
+const TABS = [['overview', 'Umumiy'], ['feedback', 'Fikr-mulohaza'], ['tasks', 'Topshiriqlar'], ['plan', 'Traektoriya'], ['progress', 'Progress'], ['analysis', 'AI tahlil'], ['materials', 'Materiallar'], ['notes', 'Izohlar'], ['message', 'Xabar']];
 const field = (label, el) => h('div', { class: 'field' }, h('label', {}, label), el);
 const sel = (opts, val) => h('select', {}, opts.map(([v, t]) => h('option', { value: v, selected: String(v) === String(val) }, t)));
 
@@ -138,6 +138,13 @@ export async function teacherStudentView({ args }) {
     materials: () => h('div', {}, h('div', { class: 'card' }, h('h2', {}, 'Material yuklash'), uploadForm(id, refresh)),
       h('div', { class: 'card' }, h('h2', {}, "Bu o'quvchi uchun materiallar"), materialList(data.materials, refresh))),
 
+    message: () => {
+      const ta = h('textarea', { placeholder: "O'quvchiga qisqa xabar (u bosh sahifada ko'radi)…", style: { minHeight: '90px' }, maxlength: 1000 });
+      const list = h('div', {});
+      const load = () => api.get(`/api/teacher/students/${id}/messages`).then((ms) => mount(list, ms.map((m) => h('div', { class: 'q' }, h('div', { class: 'fb' }, m.text), h('small', { class: 'muted' }, `${m.created_at.slice(0, 16)} · ${m.read ? "o'qilgan" : "o'qilmagan"}`)))));
+      load();
+      return h('div', { class: 'card' }, h('h2', {}, "O'quvchiga xabar"), ta, h('button', { class: 'btn', style: { marginTop: '8px' }, onclick: async () => { try { await api.post(`/api/teacher/students/${id}/message`, { text: ta.value }); ta.value = ''; toast('Yuborildi'); load(); } catch (e) { toast(e.message, true); } } }, 'Yuborish'), list);
+    },
     notes: () => {
       const ta = h('textarea', { placeholder: 'Izoh (faqat siz ko\'rasiz)…', style: { minHeight: '90px' } });
       return h('div', { class: 'card' }, h('h2', {}, 'Shaxsiy izohlar'), ta, h('button', { class: 'btn', style: { marginTop: '8px' }, onclick: async () => { await api.post(`/api/teacher/students/${id}/notes`, { text: ta.value }); toast('Saqlandi'); refresh(); } }, 'Saqlash'),

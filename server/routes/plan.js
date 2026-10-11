@@ -66,6 +66,10 @@ export async function progressFor(userId, today) {
 }
 
 export function registerPlan(r) {
+  // Messages from the student's teacher (unread first)
+  r.get('/api/messages', async ({ user }) => q.all('SELECT m.id, m.text, m.read, m.created_at, u.name AS teacher FROM messages m JOIN users u ON u.id=m.teacher_id WHERE m.student_id=? ORDER BY m.read, m.id DESC LIMIT 10', user.id), { role: 'student' });
+  r.post('/api/messages/read', async ({ user }) => { await q.run('UPDATE messages SET read=1 WHERE student_id=? AND read=0', user.id); return { ok: true }; }, { role: 'student' });
+
   r.post('/api/goal/preview', async ({ user, body, date }) => {
     const ov = overall(await abilities(user.id));
     if (ov == null) throw bad('Avval diagnostik testni topshiring');

@@ -12,6 +12,7 @@ export function taskRow(t, { date } = {}) {
 
 export async function homeView() {
   const [plan, prog, mats] = await Promise.all([api.get('/api/plan'), api.get('/api/progress'), api.get('/api/materials').catch(() => [])]);
+  const msgs = (await api.get('/api/messages').catch(() => [])).filter((m) => !m.read);
   const me = state.me, today = plan.today;
   const day = plan.todayView;
   const goal = plan.goal;
@@ -20,6 +21,8 @@ export async function homeView() {
   return h('div', {},
     h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'muted' }, fmtDate(today, true)), h('h1', {}, `Salom, ${me.user.name.split(' ')[0]}! 👋`)),
       h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Bugungi fikr-mulohaza turi:'), toneBadge(me.today.tone))),
+    msgs.length ? h('div', { class: 'card flat' }, h('b', {}, `💬 O'qituvchidan xabar${msgs.length > 1 ? 'lar' : ''}`), msgs.map((m) => h('div', { class: 'q' }, h('div', { class: 'fb' }, m.text), h('small', { class: 'muted' }, `${m.teacher} · ${m.created_at.slice(0, 16)}`))),
+      h('button', { class: 'btn secondary sm', onclick: async (e) => { e.target.disabled = true; await api.post('/api/messages/read'); e.target.closest('.card').remove(); } }, "O'qidim")) : null,
     st.missed >= 3 && h('div', { class: 'alert warn' }, h('div', { class: 'row between' }, h('span', {}, `Siz ${st.missed} ta topshiriqni o'tkazib yubordingiz. Rejani bugundan qayta tuzamizmi?`),
       h('button', { class: 'btn sm', onclick: async (e) => { e.target.disabled = true; await api.post('/api/plan/regenerate'); toast('Reja yangilandi'); go('#/trajectory'); } }, 'Qayta rejalash'))),
     h('div', { class: 'grid g4' },

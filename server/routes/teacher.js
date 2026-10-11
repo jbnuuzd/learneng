@@ -182,6 +182,18 @@ export function registerTeacher(r) {
     return { ok: true };
   }, T);
 
+  r.post('/api/teacher/students/:id/message', async ({ user, params, body }) => {
+    const s = await myStudent(user, params.id);
+    const text = String(body.text || '').trim().slice(0, 1000);
+    if (text.length < 2) throw bad('Xabar bo\'sh');
+    await q.run('INSERT INTO messages(teacher_id,student_id,text) VALUES(?,?,?)', user.id, s.id, text);
+    return { ok: true };
+  }, T);
+  r.get('/api/teacher/students/:id/messages', async ({ user, params }) => {
+    const s = await myStudent(user, params.id);
+    return q.all('SELECT id, text, read, created_at FROM messages WHERE student_id=? AND teacher_id=? ORDER BY id DESC LIMIT 20', s.id, user.id);
+  }, T);
+
   r.get('/api/teacher/students/:id/speaking/:sid', async ({ user, params }) => {
     const s = await myStudent(user, params.id);
     const row = await q.get('SELECT * FROM speaking_sessions WHERE id=? AND user_id=?', Number(params.sid), s.id);

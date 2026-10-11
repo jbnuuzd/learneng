@@ -91,3 +91,5 @@ window.addEventListener('hashchange', render);
 window.addEventListener('auth-lost', () => { state.me = null; go('#/login'); });
 window.addEventListener('unhandledrejection', (e) => { if (e.reason instanceof ApiError) { toast(e.reason.message, true); e.preventDefault(); } });
 render();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});

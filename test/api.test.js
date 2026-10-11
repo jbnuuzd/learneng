@@ -299,3 +299,13 @@ test('csrf: cross-origin POST is rejected', async () => {
   const r = await student.req('POST', '/api/plan/regenerate', {}, { origin: 'http://evil.example' });
   assert.equal(r.status, 403);
 });
+
+test('teacher message reaches the student and can be marked read', async () => {
+  const studentId = (await teacher.get('/api/teacher/students')).data.students[0].id;
+  assert.equal((await teacher.post(`/api/teacher/students/${studentId}/message`, { text: 'Yaxshi ketyapsiz, davom eting!' })).status, 200);
+  let r = await student.get('/api/messages');
+  assert.equal(r.data.length, 1); assert.equal(r.data[0].read, 0); assert.match(r.data[0].text, /davom/);
+  await student.post('/api/messages/read');
+  assert.equal((await student.get('/api/messages')).data[0].read, 1);
+  assert.equal((await student.post(`/api/teacher/students/${studentId}/message`, { text: 'hack' })).status, 403);
+});
