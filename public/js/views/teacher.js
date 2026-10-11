@@ -20,6 +20,7 @@ export async function teacherHomeView() {
       const row = (name, t) => t && h('tr', {}, h('td', {}, name), h('td', {}, t.ok ? '✅' : '❌'), h('td', { class: 'muted' }, t.ok ? `${t.ms} ms${t.detail ? ' · ' + t.detail : ''}` : t.error));
       mount(aiBox, h('div', { class: 'card flat' }, r.tests ? [
         h('div', { class: 'alert ' + (r.allOk ? 'ok' : 'bad') }, r.allOk ? "✅ Gemini to'liq ishlayapti (matn, audio qabul qilish, ovoz sintezi)." : '❌ Gemini bilan muammo bor.'),
+        r.keys?.length > 1 && h('p', { class: 'muted' }, `🔑 ${r.keys.length} ta API kalit: ` + r.keys.map((k) => k.key + (k.cooling ? ` (limit tugagan, ${Math.ceil(k.cooling / 60)} daq. kutadi)` : ' ✓')).join(', ')),
         r.trace && h('p', { class: 'muted' }, `Worker joylashuvi: ${r.trace.colo} (${r.trace.loc}) · modellar: ${r.textModel}, ${r.ttsModel}`),
         h('table', { class: 't' }, h('tbody', {}, row('Matn', r.tests.text), row('Audio kirish (speaking)', r.tests.audio), row('Ovoz sintezi (TTS)', r.tests.tts))),
         r.hint && h('div', { class: 'alert warn' }, '💡 ' + r.hint)] : h('div', { class: 'alert bad' }, r.hint || 'AI ulanmagan')));

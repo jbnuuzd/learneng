@@ -4,7 +4,17 @@ import { q } from './db.js';
 export class AiError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
-export const aiEnabled = () => !!cfg.apiKey;
+export const aiEnabled = () => cfg.apiKeys.length > 0;
+
+// Key rotation: a key that hits its quota (429) or is rejected is parked for a while and the next key is used.
+const cooldown = new Map();   // key -> timestamp until which it is skipped (per Worker instance)
+const keyTag = (k) => '…' + k.slice(-4);
+function pickKey(skip = new Set()) {
+  const keys = cfg.apiKeys.filter((k) => !skip.has(k));
+  const now = Date.now();
+  return keys.find((k) => (cooldown.get(k) || 0) <= now) || keys.sort((a, b) => (cooldown.get(a) || 0) - (cooldown.get(b) || 0))[0] || null;
+}
+export const keyStatus = () => cfg.apiKeys.map((k) => ({ key: keyTag(k), cooling: (cooldown.get(k) || 0) > Date.now() ? Math.ceil(((cooldown.get(k) || 0) - Date.now()) / 1000) : 0 }));
 
 // Last Gemini outcome in this Worker instance, shown in the teacher's "AI connection" check.
 export const aiState = { lastError: null, lastOkAt: null, models: {} };   // models: auto-selected replacements when a configured model is retired
@@ -17,7 +27,7 @@ const note = (e) => { aiState.lastError = { at: new Date().toISOString(), messag
 
 // Google retires model names regularly. When the configured one is gone (404), ask the API which models exist and pick the newest suitable one.
 async function listModels() {
-  const r = await fetch(`${cfg.baseUrl}/models?pageSize=200`, { headers: { 'x-goog-api-key': cfg.apiKey }, signal: AbortSignal.timeout(15000) });
+  const r = await fetch(`${cfg.baseUrl}/models?pageSize=200`, { headers: { 'x-goog-api-key': pickKey() }, signal: AbortSignal.timeout(15000) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new AiError('failed', `models.list → ${r.status}: ${d?.error?.message || 'xato'}`);
   return (d.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => m.name.replace(/^models\//, ''));
@@ -31,15 +41,17 @@ const configured = (kind) => (kind === 'tts' ? cfg.ttsModel : cfg.textModel);
 const effective = (kind) => aiState.models[kind] || configured(kind);
 
 async function call(kind, body, timeoutMs, { fast = false } = {}) {
-  if (!cfg.apiKey) throw new AiError('no_key', 'GEMINI_API_KEY sozlanmagan');
+  if (!aiEnabled()) throw new AiError('no_key', 'GEMINI_API_KEY sozlanmagan');
+  const tried = new Set();
   let model = effective(kind), lastErr, switched = false;
   if (fast && kind === 'text' && !aiState.noThinkingCfg) body = { ...body, generationConfig: { ...body.generationConfig, thinkingConfig: { thinkingBudget: 0 } } };
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 3 + cfg.apiKeys.length; attempt++) {
     let r;
+    const apiKey = pickKey();
     try {
       r = await fetch(`${cfg.baseUrl}/models/${model}:generateContent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.apiKey },
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -52,6 +64,12 @@ async function call(kind, body, timeoutMs, { fast = false } = {}) {
     const msg = data?.error?.message || 'xato';
     const detail = `${model} → ${r.status}${data?.error?.status ? ' ' + data.error.status : ''}: ${msg}`;
     lastErr = new AiError('failed', detail);
+    const keyBad = r.status === 429 || r.status === 401 || r.status === 403 || (r.status === 400 && /API key not valid|API_KEY_INVALID/i.test(msg));
+    if (keyBad) {                                                  // this key is exhausted/invalid: park it and move on to the next key at once
+      cooldown.set(apiKey, Date.now() + (r.status === 429 ? 5 * 60000 : 60 * 60000));
+      tried.add(apiKey);
+      if (cfg.apiKeys.some((k) => !tried.has(k))) { console.error(`[gemini] key ${keyTag(apiKey)} → ${r.status}, switching to the next key`); continue; }
+    }
     if (r.status === 400 && /thinking/i.test(msg) && body.generationConfig?.thinkingConfig) {   // this model does not accept the switch: remember and retry plainly
       aiState.noThinkingCfg = true;
       const { thinkingConfig, ...gc } = body.generationConfig; body = { ...body, generationConfig: gc };
@@ -238,5 +256,5 @@ export async function runAiChecks() {
   else if (/API key|API_KEY_INVALID|PERMISSION_DENIED|401|403/i.test(errs)) hint = "API kalit noto'g'ri yoki ruxsati yo'q. AI Studio'da yangi kalit yarating va Secret'ni yangilang.";
   else if (/429|RESOURCE_EXHAUSTED|quota/i.test(errs)) hint = "Bepul kvota (daqiqa/kun limiti) tugagan. Biroz kuting yoki AI Studio'da hisob-kitobni yoqing.";
   else if (/404|not found|NOT_FOUND/i.test(errs)) hint = "Model nomi topilmadi. wrangler.jsonc dagi GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL ni yangilang.";
-  return { key: aiEnabled(), textModel: effective('text'), ttsModel: effective('tts'), configured: { text: cfg.textModel, tts: cfg.ttsModel }, autoSwitched: { ...aiState.models }, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
+  return { key: aiEnabled(), keys: keyStatus(), textModel: effective('text'), ttsModel: effective('tts'), configured: { text: cfg.textModel, tts: cfg.ttsModel }, autoSwitched: { ...aiState.models }, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
 }
