@@ -4,17 +4,26 @@ import { q } from './db.js';
 export class AiError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
-export const aiEnabled = () => cfg.apiKeys.length > 0;
+// Keys come from Secrets (env) and from the teacher UI (D1 table ai_keys, cached per Worker instance for a minute).
+let dbKeys = [], dbKeysAt = 0;
+export async function loadDbKeys(force = false) {
+  if (!force && Date.now() - dbKeysAt < 60000) return;
+  dbKeysAt = Date.now();
+  try { dbKeys = (await q.all('SELECT api_key FROM ai_keys ORDER BY id')).map((r) => r.api_key); } catch { /* table not migrated yet */ }
+}
+export const allKeys = () => [...new Set([...cfg.apiKeys, ...dbKeys])];
+export const aiEnabled = () => allKeys().length > 0;
 
 // Key rotation: a key that hits its quota (429) or is rejected is parked for a while and the next key is used.
 const cooldown = new Map();   // key -> timestamp until which it is skipped (per Worker instance)
 const keyTag = (k) => '…' + k.slice(-4);
 function pickKey(skip = new Set()) {
-  const keys = cfg.apiKeys.filter((k) => !skip.has(k));
+  const keys = allKeys().filter((k) => !skip.has(k));
   const now = Date.now();
   return keys.find((k) => (cooldown.get(k) || 0) <= now) || keys.sort((a, b) => (cooldown.get(a) || 0) - (cooldown.get(b) || 0))[0] || null;
 }
-export const keyStatus = () => cfg.apiKeys.map((k) => ({ key: keyTag(k), cooling: (cooldown.get(k) || 0) > Date.now() ? Math.ceil(((cooldown.get(k) || 0) - Date.now()) / 1000) : 0 }));
+export const keyTagOf = keyTag;
+export const keyStatus = () => allKeys().map((k) => ({ key: keyTag(k), source: cfg.apiKeys.includes(k) ? 'secret' : 'ui', cooling: (cooldown.get(k) || 0) > Date.now() ? Math.ceil(((cooldown.get(k) || 0) - Date.now()) / 1000) : 0 }));
 
 // Last Gemini outcome in this Worker instance, shown in the teacher's "AI connection" check.
 export const aiState = { lastError: null, lastOkAt: null, models: {} };   // models: auto-selected replacements when a configured model is retired
@@ -45,7 +54,7 @@ async function call(kind, body, timeoutMs, { fast = false } = {}) {
   const tried = new Set();
   let model = effective(kind), lastErr, switched = false;
   if (fast && kind === 'text' && !aiState.noThinkingCfg) body = { ...body, generationConfig: { ...body.generationConfig, thinkingConfig: { thinkingBudget: 0 } } };
-  for (let attempt = 0; attempt < 3 + cfg.apiKeys.length; attempt++) {
+  for (let attempt = 0; attempt < 3 + allKeys().length; attempt++) {
     let r;
     const apiKey = pickKey();
     try {
@@ -68,7 +77,7 @@ async function call(kind, body, timeoutMs, { fast = false } = {}) {
     if (keyBad) {                                                  // this key is exhausted/invalid: park it and move on to the next key at once
       cooldown.set(apiKey, Date.now() + (r.status === 429 ? 5 * 60000 : 60 * 60000));
       tried.add(apiKey);
-      if (cfg.apiKeys.some((k) => !tried.has(k))) { console.error(`[gemini] key ${keyTag(apiKey)} → ${r.status}, switching to the next key`); continue; }
+      if (allKeys().some((k) => !tried.has(k))) { console.error(`[gemini] key ${keyTag(apiKey)} → ${r.status}, switching to the next key`); continue; }
     }
     if (r.status === 400 && /thinking/i.test(msg) && body.generationConfig?.thinkingConfig) {   // this model does not accept the switch: remember and retry plainly
       aiState.noThinkingCfg = true;

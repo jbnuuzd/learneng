@@ -3,7 +3,7 @@ import { setEnv } from './lib/env.js';
 import { createRouter, HttpError, readJson, parseCookies } from './lib/http.js';
 import { userFromToken } from './lib/auth.js';
 import { clientDate } from './lib/dates.js';
-import { flushTts } from './lib/gemini.js';
+import { flushTts, loadDbKeys } from './lib/gemini.js';
 import { registerAuth } from './routes/auth.js';
 import { registerDiagnostic } from './routes/diagnostic.js';
 import { registerPlan } from './routes/plan.js';
@@ -45,6 +45,7 @@ async function handle(request, env, execCtx) {
     if (!route.opts.raw && !ct.includes('application/json') && !(len === '0' || len === null)) throw new HttpError(415, 'JSON kerak');
     if (route.opts.raw && !request.headers.get('x-requested-with')) throw new HttpError(403, "Noto'g'ri so'rov");
   }
+  await loadDbKeys();
   const user = await userFromToken(parseCookies(request).sid);
   if (route.opts.auth !== false && !user) throw new HttpError(401, 'Tizimga kiring');
   if (route.opts.role && user?.role !== route.opts.role) throw new HttpError(403, "Bu amal uchun ruxsat yo'q");

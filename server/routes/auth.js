@@ -2,7 +2,7 @@ import { q } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
 import { hashPassword, verifyPassword, createSession, sessionCookie, newInviteCode, rateLimit } from '../lib/auth.js';
 import { cfg } from '../lib/env.js';
-import { aiEnabled, aiState, runAiChecks } from '../lib/gemini.js';
+import { aiEnabled, aiState, runAiChecks, loadDbKeys, keyStatus, allKeys } from '../lib/gemini.js';
 import { TONES } from '../lib/ai.js';
 import { effectiveTone, currentLevel } from '../lib/progress.js';
 import { activePlan } from '../planner.js';
@@ -94,6 +94,34 @@ export function registerAuth(r) {
   });
 
   r.get('/api/ai/status', async () => ({ enabled: aiEnabled(), textModel: aiState.models.text || cfg.textModel, ttsModel: aiState.models.tts || cfg.ttsModel, lastError: aiState.lastError, lastOkAt: aiState.lastOkAt }));
+  // Teachers manage Gemini API keys here (stored in D1; only the last 4 characters are ever sent back).
+  const keyList = async () => {
+    const rows = await q.all('SELECT id, api_key, label, created_at FROM ai_keys ORDER BY id');
+    const st = keyStatus();
+    return { keys: [...st.filter((k) => k.source === 'secret').map((k) => ({ ...k, id: null })),
+      ...rows.map((x) => ({ id: x.id, label: x.label, created: x.created_at, ...(st.find((k) => k.key === '…' + x.api_key.slice(-4)) || { key: '…' + x.api_key.slice(-4), cooling: 0 }), source: 'ui' }))] };
+  };
+  r.get('/api/ai/keys', async ({ user }) => { if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun"); await loadDbKeys(true); return keyList(); });
+  r.post('/api/ai/keys', async ({ user, body }) => {
+    if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
+    rateLimit(user.id, 'aikey', 20);
+    const keys = String(body.key || '').split(/[\s,;]+/).filter(Boolean);
+    if (!keys.length || keys.length > 10) throw bad('Kalitni kiriting (bir vaqtda 10 tagacha)');
+    const label = String(body.label || '').trim().slice(0, 40);
+    let added = 0;
+    for (const k of keys) {
+      if (!/^[A-Za-z0-9_-]{20,80}$/.test(k)) throw bad("Kalit shakli noto'g'ri (AI Studio'dagi «AIza…» kalitni to'liq nusxalang)");
+      if (allKeys().includes(k)) continue;
+      await q.run('INSERT OR IGNORE INTO ai_keys(api_key,label,added_by) VALUES(?,?,?)', k, label, user.id); added++;
+    }
+    await loadDbKeys(true);
+    return { added, ...(await keyList()) };
+  });
+  r.delete('/api/ai/keys/:id', async ({ user, params }) => {
+    if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
+    await q.run('DELETE FROM ai_keys WHERE id=?', Number(params.id)); await loadDbKeys(true);
+    return keyList();
+  });
   r.post('/api/ai/test', async ({ user }) => {
     if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
     rateLimit(user.id, 'aitest', 6);

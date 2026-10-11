@@ -13,6 +13,27 @@ export async function teacherHomeView() {
   const d = await api.get('/api/teacher/students');
   const copy = () => navigator.clipboard?.writeText(d.inviteCode).then(() => toast('Kod nusxalandi'));
   const aiBox = h('div', {});
+  const keyBox = h('div', {});
+  const drawKeys = (d) => {
+    const inp = h('input', { type: 'password', placeholder: 'AIza… (bir nechtasini vergul bilan ham yozish mumkin)', autocomplete: 'off', 'aria-label': 'Gemini API kalit' });
+    const lab = h('input', { type: 'text', placeholder: 'Nom (ixtiyoriy)', maxlength: 40, 'aria-label': 'Kalit nomi' });
+    const add = h('button', { class: 'btn sm', onclick: async () => {
+      if (!inp.value.trim()) return;
+      add.disabled = true;
+      try { const r = await api.post('/api/ai/keys', { key: inp.value, label: lab.value }); toast(r.added ? `${r.added} ta kalit qo'shildi` : 'Bu kalit allaqachon bor'); drawKeys(r); }
+      catch (e) { toast(e.message, true); add.disabled = false; }
+    } }, "Qo'shish");
+    mount(keyBox, h('div', { class: 'card flat' },
+      h('b', {}, '🔑 Gemini API kalitlari'),
+      h('p', { class: 'muted' }, "Bir nechta kalit qo'shing: birining kunlik/daqiqalik limiti tugasa, ilova avtomatik keyingisiga o'tadi. Kalitlarni turli Google akkaunt/loyihalarda yarating (aistudio.google.com/apikey)."),
+      d.keys.length ? h('table', { class: 't' }, h('tbody', {}, d.keys.map((k) => h('tr', {},
+        h('td', {}, k.key), h('td', { class: 'muted' }, (k.label || '') + (k.source === 'secret' ? ' (Secret)' : '')),
+        h('td', {}, k.cooling ? `⏳ limit tugagan (~${Math.ceil(k.cooling / 60)} daq.)` : '✅'),
+        h('td', {}, k.id ? h('button', { class: 'btn danger sm', onclick: async () => { if (!confirm("Kalit o'chirilsinmi?")) return; try { drawKeys(await api.del('/api/ai/keys/' + k.id)); } catch (e) { toast(e.message, true); } } }, "O'chirish") : null))))) : h('p', { class: 'muted' }, "Hali kalit yo'q."),
+      h('div', { class: 'row' }, inp, lab, add),
+      h('p', { class: 'muted' }, "Kalitlar bazada saqlanadi va faqat o'qituvchilarga oxirgi 4 belgisi ko'rinadi. Qo'shgach «AI ulanishini tekshirish» ni bosing.")));
+  };
+  api.get('/api/ai/keys').then(drawKeys).catch(() => {});
   const aiBtn = h('button', { class: 'btn secondary sm', onclick: async () => {
     aiBtn.disabled = true; mount(aiBox, loading('Gemini tekshirilmoqda (10–30 soniya)…'));
     try {
@@ -28,7 +49,7 @@ export async function teacherHomeView() {
     aiBtn.disabled = false;
   } }, '🤖 AI ulanishini tekshirish');
   return h('div', {},
-    h('div', { class: 'card flat row between' }, h('div', {}, h('b', {}, 'Sun\'iy intellekt'), h('div', { class: 'muted' }, "Speaking, baholash va audio ishlamasa, avval shuni bosing: aniq sabab ko'rsatiladi.")), aiBtn), aiBox,
+    h('div', { class: 'card flat row between' }, h('div', {}, h('b', {}, 'Sun\'iy intellekt'), h('div', { class: 'muted' }, "Speaking, baholash va audio ishlamasa, avval shuni bosing: aniq sabab ko'rsatiladi.")), aiBtn), aiBox, keyBox,
     h('div', { class: 'row between' }, h('h1', {}, "O'quvchilar"), h('div', { class: 'row' }, h('a', { class: 'btn secondary sm', href: '/api/teacher/export.csv' }, '⬇ CSV'), h('div', { class: 'card flat', style: { margin: 0, padding: '8px 14px' } }, h('small', { class: 'muted' }, 'Ulanish kodi: '), h('b', { style: { letterSpacing: '.08em' } }, d.inviteCode), ' ', h('button', { class: 'btn ghost sm', onclick: copy }, 'Nusxalash')))),
     d.students.length ? h('div', { class: 'grid g2' }, d.students.map((s) => h('a', { class: 'card', href: '#/t/student/' + s.id, style: { color: 'inherit', textDecoration: 'none' } },
       h('div', { class: 'row between' }, h('div', {}, h('b', { style: { fontSize: '1.1rem' } }, s.name), h('div', { class: 'muted' }, s.email)), s.level ? h('div', { class: 'big-level', style: { fontSize: '1.6rem' } }, s.level.cefr) : h('span', { class: 'badge warn' }, 'Diagnostika yo\'q')),

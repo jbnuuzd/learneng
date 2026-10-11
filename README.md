@@ -43,7 +43,8 @@ Deploy'dan keyin tekshirish: `node scripts/smoke.mjs https://learneng.<akkaunt>.
 **API kalitni qayerga qo'yish:** deploy qilingan saytda — `wrangler secret put GEMINI_API_KEY` yoki Cloudflare paneli →
 Workers & Pages → `learneng` → Settings → Variables and Secrets → *Add* (turi: **Secret**). Kalit kodga yoki gitga yozilmaydi.
 Kalitni https://aistudio.google.com/apikey dan oling.
-**Bir nechta kalit:** limit tez tugasa, `GEMINI_API_KEY` Secret'iga kalitlarni vergul bilan yozing (`kalit1,kalit2,kalit3`) yoki alohida Secret'lar `GEMINI_API_KEY_2` … `GEMINI_API_KEY_9` qo'shing. Birining limiti (429) tugasa ilova o'sha zahoti keyingisiga o'tadi va tugagan kalitni 5 daqiqa ishlatmaydi. Kalitlarni turli Google akkauntlar/loyihalarda yarating — bir loyihadagi kalitlar limiti umumiy. Secret qo'shgach qayta deploy shart emas, lekin yangi versiya chiqarish tavsiya etiladi (`npm run deploy`).
+**Bir nechta kalit (eng oson yo'l):** o'qituvchi sifatida kiring → bosh sahifadagi «🔑 Gemini API kalitlari» bo'limida kalitlarni qo'shing/o'chiring (bazada saqlanadi, qayta deploy shart emas; `npm run deploy:ci` yangi jadvalni o'zi yaratadi).
+**Yoki Secret orqali:** limit tez tugasa, `GEMINI_API_KEY` Secret'iga kalitlarni vergul bilan yozing (`kalit1,kalit2,kalit3`) yoki alohida Secret'lar `GEMINI_API_KEY_2` … `GEMINI_API_KEY_9` qo'shing. Birining limiti (429) tugasa ilova o'sha zahoti keyingisiga o'tadi va tugagan kalitni 5 daqiqa ishlatmaydi. Kalitlarni turli Google akkauntlar/loyihalarda yarating — bir loyihadagi kalitlar limiti umumiy. Secret qo'shgach qayta deploy shart emas, lekin yangi versiya chiqarish tavsiya etiladi (`npm run deploy`).
 
 Lug'at bazasini to'ldirish: o'qituvchi sifatida kiring → **Materiallar va lug'at** → har bir mavzu yonidagi «+40 so'z» (Gemini yaratadi va D1 da saqlaydi).
 
