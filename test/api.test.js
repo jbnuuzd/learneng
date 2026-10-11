@@ -315,3 +315,16 @@ test('progress exposes achievements derived from stats', async () => {
   assert.ok(Array.isArray(p.badges) && p.badges.length >= 4);
   assert.ok(p.badges.some((b) => !b.earned && typeof b.progress === 'number'), 'next goals are shown with progress');
 });
+
+test('teacher weekly report: per-student 7-day numbers, flags, CSV; students are refused', async () => {
+  const w = (await teacher.get('/api/teacher/weekly')).data;
+  assert.equal(w.to, date); assert.ok(w.totals.students >= 1);
+  const s = w.students[0];
+  for (const k of ['planned', 'done', 'minutes', 'prevMinutes', 'activeDays', 'newWords', 'speaking', 'flags']) assert.ok(k in s, k);
+  assert.ok(s.done <= s.planned && s.activeDays <= 7);
+  const csvRes = await teacher.get('/api/teacher/weekly.csv');
+  assert.equal(csvRes.status, 200); assert.match(String(csvRes.data), /Ism,Rejalashtirilgan/);
+  const sum = (await teacher.post('/api/teacher/weekly/summary')).data;
+  assert.equal(sum.ai, false);
+  assert.equal((await student.get('/api/teacher/weekly')).status, 403);
+});

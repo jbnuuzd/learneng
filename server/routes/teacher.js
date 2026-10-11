@@ -11,6 +11,7 @@ import { studentsOverview, buildAlerts } from '../lib/overview.js';
 import { generatePlan, activePlan, weakTopics, VOCAB, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
 import { analyseGoal } from '../analysis.js';
+import { weeklyReport, weeklySummary } from '../lib/weekly.js';
 import { dayView, statsFor, resolveTarget, resolveDeadline } from './plan.js';
 import { previousAttempts } from './tasks.js';
 import { sessionView } from './speaking.js';
@@ -86,6 +87,14 @@ export function registerTeacher(r) {
   const T = { role: 'teacher' };
 
   r.get('/api/teacher/students', async ({ user, date }) => ({ inviteCode: user.invite_code, students: await studentsOverview(user.id, date) }), T);
+
+  r.get('/api/teacher/weekly', async ({ user, date }) => weeklyReport(user.id, date), T);
+  r.get('/api/teacher/weekly.csv', async ({ user, date }) => {
+    const w = await weeklyReport(user.id, date);
+    return csv([['Ism', 'Rejalashtirilgan', 'Bajarilgan', 'Bajarish %', 'Daqiqa (shu hafta)', 'Daqiqa (oldingi hafta)', 'Faol kunlar', "Yangi so'z", 'Speaking', "O'rtacha ball %", 'Belgilar'],
+      ...w.students.map((s) => [s.name, s.planned, s.done, s.completion ?? '', s.minutes, s.prevMinutes, s.activeDays, s.newWords, s.speaking, s.avgScore ?? '', s.flags.join(' ')])], `haftalik-${w.to}.csv`);
+  }, T);
+  r.post('/api/teacher/weekly/summary', async ({ user, date }) => { rateLimit(user.id, 'ai', 40); return weeklySummary(await weeklyReport(user.id, date)); }, T);
 
   r.get('/api/teacher/students/:id', async ({ user, params, date }) => {
     const s = await myStudent(user, params.id);

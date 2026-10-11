@@ -12,7 +12,7 @@ import { readingTrainerView, listeningTrainerView, speakingTrainerView, pronunci
 import { progressView } from './views/progress.js';
 import { mockView } from './views/mock.js';
 import { profileView } from './views/profile.js';
-import { teacherHomeView, teacherStudentView, teacherMaterialsView } from './views/teacher.js';
+import { teacherHomeView, teacherStudentView, teacherMaterialsView, teacherWeeklyView } from './views/teacher.js';
 
 const S = 'student', T = 'teacher';
 const routes = [
@@ -21,7 +21,7 @@ const routes = [
   [/^\/trajectory(?:\/(\d{4}-\d{2}-\d{2}))?$/, S, trajectoryView], [/^\/task\/(\d+)$/, S, lessonView],
   [/^\/trainer\/reading$/, S, readingTrainerView], [/^\/trainer\/listening$/, S, listeningTrainerView], [/^\/trainer\/pronunciation$/, S, pronunciationTrainerView], [/^\/trainer\/speaking(?:\/(\d+))?$/, S, speakingTrainerView],
   [/^\/mock(?:\/(\d+))?$/, S, mockView], [/^\/progress$/, S, progressView], [/^\/profile$/, S, profileView],
-  [/^\/t$/, T, teacherHomeView], [/^\/t\/student\/(\d+)(?:\/(\w+))?$/, T, teacherStudentView], [/^\/t\/materials$/, T, teacherMaterialsView], [/^\/t\/profile$/, T, profileView],
+  [/^\/t$/, T, teacherHomeView], [/^\/t\/student\/(\d+)(?:\/(\w+))?$/, T, teacherStudentView], [/^\/t\/materials$/, T, teacherMaterialsView], [/^\/t\/weekly$/, T, teacherWeeklyView], [/^\/t\/profile$/, T, profileView],
 ];
 
 const NAV_S = [
@@ -29,7 +29,7 @@ const NAV_S = [
   ['/trainer/reading', '📖', 'Reading trenajyor'], ['/trainer/listening', '🎧', 'Listening trenajyor'], ['/trainer/speaking', '🎤', 'Speaking trenajyor'], ['/trainer/pronunciation', '🗣', 'Talaffuz mashqi'],
   ['sep', 'Natijalar'], ['/mock', '📝', 'IELTS mock test'], ['/progress', '📈', 'Progress va tahlil'], ['/profile', '👤', 'Profil'],
 ];
-const NAV_T = [['/t', '👥', "O'quvchilar"], ['/t/materials', '📚', 'Materiallar va lug\'at'], ['/t/profile', '👤', 'Profil']];
+const NAV_T = [['/t', '👥', "O'quvchilar"], ['/t/weekly', '📊', 'Haftalik hisobot'], ['/t/materials', '📚', 'Materiallar va lug\'at'], ['/t/profile', '👤', 'Profil']];
 
 // ---- theme: auto (system) / light / dark, remembered per browser
 const THEMES = [['auto', '🌓 Avto'], ['light', '☀️ Yorug\''], ['dark', '🌙 Tungi']];

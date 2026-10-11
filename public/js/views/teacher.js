@@ -238,3 +238,30 @@ export async function teacherMaterialsView() {
   await loadVocab();
   return h('div', {}, h('h1', {}, 'Materiallar va lug\'at'), h('div', { class: 'card' }, h('h2', {}, 'Barcha o\'quvchilar uchun yuklash'), h('p', { class: 'muted' }, "Kitoblar, PDF, audio va boshqa o'quv materiallari. Muayyan o'quvchiga yuklash uchun uning sahifasidagi «Materiallar» bo'limidan foydalaning."), uploadForm(null, load)), box, vbox);
 }
+
+// ------------------------------------------------------------------------- weekly report
+const FLAG = { inactive: ['bad', 'Faol emas'], behind: ['bad', 'Orqada'], dropping: ['warn', 'Pasaymoqda'], improving: ['ok', 'O\'smoqda'] };
+export async function teacherWeeklyView() {
+  const w = await api.get('/api/teacher/weekly');
+  const sumBox = h('div', {});
+  const btn = h('button', { class: 'btn sm', onclick: async () => {
+    btn.disabled = true; mount(sumBox, loading('AI xulosa tayyorlamoqda…'));
+    try {
+      const r = await api.post('/api/teacher/weekly/summary');
+      mount(sumBox, r.text ? h('div', { class: 'card flat' }, h('b', {}, '🤖 AI xulosa'), h('div', { class: 'fb' }, r.text)) : h('div', { class: 'alert warn' }, r.error || "AI ulanmagan — xulosa tayyorlanmadi."));
+    } catch (e) { mount(sumBox, h('div', { class: 'alert bad' }, e.message)); }
+    btn.disabled = false;
+  } }, '🤖 AI xulosa');
+  const t = w.totals, trend = (a, b) => (b ? (a >= b ? '▲' : '▼') : '');
+  return h('div', {},
+    h('div', { class: 'row between' }, h('div', {}, h('h1', {}, '📊 Haftalik hisobot'), h('p', { class: 'muted' }, `${fmtDate(w.from)} — ${fmtDate(w.to)}`)), h('div', { class: 'row' }, btn, h('a', { class: 'btn secondary sm', href: '/api/teacher/weekly.csv' }, '⬇ CSV'))),
+    h('div', { class: 'grid g4' }, [[t.students, "o'quvchi"], [fmtMin(t.minutes), "jami o'qilgan"], [t.tasksDone, 'bajarilgan topshiriq'], [t.attention, "e'tibor kerak"]].map(([b, s]) => h('div', { class: 'card flat stat' }, h('b', {}, b), h('span', {}, s)))),
+    sumBox,
+    w.students.length ? h('div', { class: 'card', style: { overflowX: 'auto' } }, h('table', { class: 't' },
+      h('thead', {}, h('tr', {}, ['O\'quvchi', 'Bajarilish', 'Daqiqa', 'Faol kun', "So'z", 'Speaking', "O'rt. ball", 'Holat'].map((x) => h('th', {}, x)))),
+      h('tbody', {}, w.students.map((s) => h('tr', { style: { cursor: 'pointer' }, onclick: () => go('#/t/student/' + s.id) },
+        h('td', {}, h('b', {}, s.name)),
+        h('td', {}, s.completion == null ? '—' : [h('div', {}, `${s.done}/${s.planned} · ${s.completion}%`), bar(s.completion / 100, s.completion >= 70 ? 'ok' : '')]),
+        h('td', {}, `${fmtMin(s.minutes)} `, h('small', { class: 'muted' }, trend(s.minutes, s.prevMinutes))), h('td', {}, `${s.activeDays}/7`), h('td', {}, s.newWords), h('td', {}, s.speaking), h('td', {}, s.avgScore == null ? '—' : s.avgScore + '%'),
+        h('td', {}, s.flags.length ? s.flags.map((f) => h('span', { class: 'badge ' + FLAG[f][0], style: { marginRight: '4px' } }, FLAG[f][1])) : h('span', { class: 'muted' }, '—'))))))) : h('div', { class: 'card' }, "Hozircha o'quvchilar yo'q."));
+}
