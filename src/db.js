@@ -1,13 +1,10 @@
 'use strict';
-const { DatabaseSync } = require('node:sqlite');
-const fs = require('node:fs');
-const path = require('node:path');
-
-function open(file) {
-  if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
-  db.exec(`
+/*
+ * Ma'lumotlar bazasi qatlami — Node (node:sqlite, db-node.js) va Cloudflare D1 (db-d1.js) uchun BIR XIL asinxron interfeys:
+ *   db.prepare(sql).get(...args) | .all(...args) | .run(...args)   (hammasi Promise)
+ *   db.batch([[sql, ...args], ...])                               (atomik)
+ */
+const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   login TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -140,15 +137,37 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
-`);
-  const cols = db.prepare('PRAGMA table_info(doc_templates)').all().map((c) => c.name);
-  if (!cols.includes('cancelled_from')) db.exec("ALTER TABLE doc_templates ADD COLUMN cancelled_from TEXT NOT NULL DEFAULT ''");
-  return db;
+CREATE TABLE IF NOT EXISTS login_attempts (
+  key TEXT NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS journals_name_uq ON journals(name COLLATE NOCASE);
+CREATE UNIQUE INDEX IF NOT EXISTS requirements_uq ON requirements(degree, kind);
+CREATE UNIQUE INDEX IF NOT EXISTS quotes_uq ON quotes(author, text);
+CREATE INDEX IF NOT EXISTS user_journals_idx ON user_journals(user_id, category, access);
+CREATE INDEX IF NOT EXISTS login_attempts_idx ON login_attempts(key, ts);
+`;
+
+function schemaStatements() {
+  return SCHEMA.replace(/--[^\n]*/g, '').split(';').map((x) => x.trim()).filter(Boolean);
 }
 
-const getSetting = (db, key, def = '') =>
-  db.prepare('SELECT value FROM settings WHERE key=?').get(key)?.value ?? def;
+async function initSchema(db) {
+  await db.batch(schemaStatements().map((sql) => [sql]));
+  const cols = (await db.prepare('PRAGMA table_info(doc_templates)').all()).map((c) => c.name);
+  if (!cols.includes('cancelled_from')) await db.prepare("ALTER TABLE doc_templates ADD COLUMN cancelled_from TEXT NOT NULL DEFAULT ''").run();
+}
+
+async function getSetting(db, key, def = '') {
+  const row = await db.prepare('SELECT value FROM settings WHERE key=?').get(key);
+  return row?.value ?? def;
+}
 const setSetting = (db, key, value) =>
   db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value));
 
-module.exports = { open, getSetting, setSetting };
+/** Katta batch'larni bo'laklarga bo'lib yuboradi (D1 cheklovlari uchun) */
+async function batchChunked(db, statements, size = 80) {
+  for (let i = 0; i < statements.length; i += size) await db.batch(statements.slice(i, i + size));
+}
+
+module.exports = { SCHEMA, initSchema, getSetting, setSetting, batchChunked };

@@ -1,7 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { open } = require('../src/db');
+const { open } = require('../src/db-node');
+const { initSchema } = require('../src/db');
 const { seedAll } = require('../src/seed');
 const auth = require('../src/auth');
 const { createApp } = require('../server');
@@ -18,8 +19,8 @@ function client(base) {
 
 test('to‘liq oqim: ro‘yxatdan o‘tish, tavsiya, refresh, admin', async (t) => {
   delete process.env.ANTHROPIC_API_KEY;
-  const db = open(':memory:'); seedAll(db);
-  auth.ensureAdmin(db, { ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'S3cret-pass' }, () => {});
+  const db = open(':memory:'); await initSchema(db); await seedAll(db);
+  await auth.ensureAdmin(db, { ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'S3cret-pass' }, { log: () => {} });
   const server = createApp(db).listen(0);
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -79,10 +80,10 @@ test('to‘liq oqim: ro‘yxatdan o‘tish, tavsiya, refresh, admin', async (t) 
   assert.ok(docs.docs.length > 5 && docs.hints.length > 3);
 
   // Fid import: OAK ro'yxatidan chiqarish
-  const oakName = db.prepare("SELECT name FROM journals WHERE oak_status='active' LIMIT 1").get().name;
-  const st = feeds.applyFeed(db, feeds.parseFeed(JSON.stringify([{ name: 'Yangi OAK jurnal', oak_status: 'active' }])), 'oak', { mode: 'full', addNew: true });
+  const oakName = (await db.prepare("SELECT name FROM journals WHERE oak_status='active' LIMIT 1").get()).name;
+  const st = await feeds.applyFeed(db, feeds.parseFeed(JSON.stringify([{ name: 'Yangi OAK jurnal', oak_status: 'active' }])), 'oak', { mode: 'full', addNew: true });
   assert.ok(st.delisted > 0 && st.added === 1);
-  assert.equal(db.prepare('SELECT oak_status s FROM journals WHERE name=?').get(oakName).s, 'removed');
+  assert.equal((await db.prepare('SELECT oak_status s FROM journals WHERE name=?').get(oakName)).s, 'removed');
 });
 
 test('SCImago CSV parsing', () => {
@@ -93,17 +94,17 @@ test('SCImago CSV parsing', () => {
 
 test('OAK ma’lumotnomasi: talablar, rejim va turizm yo‘nalishi', async (t) => {
   delete process.env.ANTHROPIC_API_KEY;
-  const db = open(':memory:'); seedAll(db);
-  auth.ensureAdmin(db, { ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'S3cret-pass' }, () => {});
+  const db = open(':memory:'); await initSchema(db); await seedAll(db);
+  await auth.ensureAdmin(db, { ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'S3cret-pass' }, { log: () => {} });
   const server = createApp(db).listen(0);
   t.after(() => server.close());
   const u = client(`http://127.0.0.1:${server.address().port}`);
   await u('POST', '/register', { login: 'turist', password: 'password1', full_name: 'Test Tadqiqotchi' });
 
   // PhD: 7 ta ish = 2 OAK + 1 xorijiy + 2 xalqaro konf + 2 qo'shimcha
-  const reqs = db.prepare("SELECT kind, min_count FROM requirements WHERE degree='phd'").all();
+  const reqs = (await db.prepare("SELECT kind, min_count FROM requirements WHERE degree='phd'").all());
   assert.equal(reqs.reduce((s, r) => s + r.min_count, 0), 7);
-  assert.ok(db.prepare("SELECT COUNT(*) c FROM requirements WHERE verified=0").get().c === 0);
+  assert.ok((await db.prepare("SELECT COUNT(*) c FROM requirements WHERE verified=0").get()).c === 0);
 
   // eski tartib (2026 da tugaydi) va yangi tartib (2027 dan keyin)
   await u('PUT', '/profile', { status: 'doctoral', degree: 'phd', direction_code: '08.00.17', topic: 'Turizm va mehmonxona faoliyatida raqamli marketing', months: 3, start_month: '2026-10' });

@@ -1,6 +1,5 @@
 'use strict';
 const ai = require('./ai');
-const { getSetting, setSetting } = require('./db');
 
 const CATEGORIES = ['scopus', 'oak', 'impact', 'conference'];
 const QRANK = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
@@ -42,40 +41,45 @@ function scoreJournal(j, direction, topic) {
   return { score: rel === 0 ? 0 : 0.5 * rel + 0.25 * prestige + 0.25 * accept, matchScore: match, tagHits, kwHits };
 }
 
-function categoryFilterSql(category) {
+function matchesCategory(j, category) {
+  if (category === 'conference') return j.kind === 'conference';
+  if (j.kind !== 'journal') return false;
   switch (category) {
-    case 'scopus': return "kind='journal' AND scopus_status='active'";
-    case 'oak': return "kind='journal' AND oak_status='active'";
-    case 'impact': return "kind='journal' AND (impact_factor IS NOT NULL OR wos=1) AND (scopus_status='active' OR oak_status='active' OR wos=1)";
-    case 'conference': return "kind='conference'";
+    case 'scopus': return j.scopus_status === 'active';
+    case 'oak': return j.oak_status === 'active';
+    case 'impact': return (j.impact_factor != null || j.wos === 1) && (j.scopus_status === 'active' || j.oak_status === 'active' || j.wos === 1);
     default: throw new Error('Noto‘g‘ri kategoriya');
   }
 }
 
-function candidates(db, category, access, direction, topic, excludeIds = []) {
-  const rows = db.prepare(`SELECT * FROM journals WHERE ${categoryFilterSql(category)} AND access=?`).all(access);
-  return rows.filter((j) => !excludeIds.includes(j.id))
+function candidatesFrom(journals, category, access, direction, topic, excludeIds = []) {
+  return journals.filter((j) => j.access === access && matchesCategory(j, category) && !excludeIds.includes(j.id))
     .map((j) => ({ ...j, ...scoreJournal(j, direction, topic) }))
     .filter((j) => j.score > 0)
     .sort((a, b) => b.score - a.score || (a.quartile || 'Q9').localeCompare(b.quartile || 'Q9'));
 }
 
+async function candidates(db, category, access, direction, topic, excludeIds = []) {
+  const rows = await db.prepare('SELECT * FROM journals WHERE access=?').all(access);
+  return candidatesFrom(rows, category, access, direction, topic, excludeIds);
+}
+
 const COUNT = 10;
 
-function getProfileCtx(db, userId) {
-  const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(userId);
-  const direction = profile ? db.prepare('SELECT * FROM directions WHERE code=?').get(profile.direction_code) : null;
+async function getProfileCtx(db, userId) {
+  const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(userId);
+  const direction = profile ? await db.prepare('SELECT * FROM directions WHERE code=?').get(profile.direction_code) : null;
   return { profile, direction };
 }
 
 async function ensureRecommendations(db, userId, category, access) {
-  const { profile, direction } = getProfileCtx(db, userId);
+  const { profile, direction } = await getProfileCtx(db, userId);
   if (!profile || !direction) return { needProfile: true };
-  const existing = db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category).map((r) => r.journal_id);
-  const activeCount = db.prepare("SELECT COUNT(*) c FROM user_journals WHERE user_id=? AND category=? AND access=? AND flag=''").get(userId, category, access).c;
+  const existing = (await db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category)).map((r) => r.journal_id);
+  const activeCount = (await db.prepare("SELECT COUNT(*) c FROM user_journals WHERE user_id=? AND category=? AND access=? AND flag=''").get(userId, category, access)).c;
   const need = COUNT - activeCount;
   if (need > 0) {
-    const picks = candidates(db, category, access, direction, profile.topic, existing).slice(0, need);
+    const picks = (await candidates(db, category, access, direction, profile.topic, existing)).slice(0, need);
     await addRows(db, userId, category, access, picks, direction, profile, null);
   }
   return {};
@@ -84,14 +88,14 @@ async function ensureRecommendations(db, userId, category, access) {
 async function addRows(db, userId, category, access, picks, direction, profile, replacesList, note = '') {
   if (!picks.length) return;
   const fits = await ai.journalFits(profile, direction, picks);
-  const ins = db.prepare(`INSERT OR IGNORE INTO user_journals(user_id,journal_id,category,access,snap_quartile,fit_score,fit_text,replaces,note) VALUES(?,?,?,?,?,?,?,?,?)`);
-  picks.forEach((j, i) => {
+  await db.batch(picks.map((j, i) => {
     const f = fits.get(j.id);
-    ins.run(userId, j.id, category, access, j.quartile || '', f.score, f.text, replacesList ? replacesList[i] ?? null : null, replacesList ? 'new' : note);
-  });
+    return ['INSERT OR IGNORE INTO user_journals(user_id,journal_id,category,access,snap_quartile,fit_score,fit_text,replaces,note) VALUES(?,?,?,?,?,?,?,?,?)',
+      userId, j.id, category, access, j.quartile || '', f.score, f.text, replacesList ? replacesList[i] ?? null : null, replacesList ? 'new' : note];
+  }));
 }
 
-function list(db, userId, category, access) {
+async function list(db, userId, category, access) {
   return db.prepare(`
     SELECT uj.id AS uj_id, uj.flag, uj.flag_reason, uj.note, uj.replaces, uj.snap_quartile, uj.fit_score, uj.fit_text, uj.added_at,
            j.*
@@ -107,37 +111,41 @@ function list(db, userId, category, access) {
  *  - kvartil ko'tarilgan bo'lsa — yashil belgi.
  */
 async function refresh(db, userId, category, access, { syncFeeds } = {}) {
-  const { profile, direction } = getProfileCtx(db, userId);
+  const { profile, direction } = await getProfileCtx(db, userId);
   if (!profile || !direction) return { needProfile: true };
   const feedMsg = syncFeeds ? await syncFeeds() : null;
 
   await ensureRecommendations(db, userId, category, access);
   // oldingi refreshdagi "yangi"/"ko'tarilgan" belgilari yangi tekshiruvda tozalanadi
-  db.prepare("UPDATE user_journals SET note='' WHERE user_id=? AND category=? AND access=? AND flag=''").run(userId, category, access);
-  const rows = db.prepare(`
+  await db.prepare("UPDATE user_journals SET note='' WHERE user_id=? AND category=? AND access=? AND flag=''").run(userId, category, access);
+  const rows = await db.prepare(`
     SELECT uj.*, j.name, j.quartile, j.scopus_status, j.oak_status, j.kind FROM user_journals uj
     JOIN journals j ON j.id=uj.journal_id WHERE uj.user_id=? AND uj.category=? AND uj.access=? AND uj.flag=''`).all(userId, category, access);
 
-  const flagged = [], upgraded = [];
-  const upd = db.prepare('UPDATE user_journals SET flag=?, flag_reason=?, note=?, snap_quartile=? WHERE id=?');
+  const flagged = [], upgraded = [], stmts = [];
+  const UPD = 'UPDATE user_journals SET flag=?, flag_reason=?, note=?, snap_quartile=? WHERE id=?';
   for (const r of rows) {
     let flag = '', reason = '';
     if ((category === 'scopus' || category === 'impact') && r.scopus_status !== 'active' && r.scopus_status !== 'none') {
       flag = 'delisted'; reason = "Jurnal Scopus bazasidan chiqib ketgan (yoki faolligi to'xtatilgan)";
     }
-    if (!flag && category === 'oak' && r.oak_status !== 'active') { flag = 'removed'; reason = "Jurnal OAK tomonidan e'tirof etilgan ro'yxatdan chiqarilgan"; }
+    if (!flag && category === 'oak' && r.oak_status !== 'active') {
+      flag = 'removed'; reason = "Jurnal OAK tomonidan e'tirof etilgan ro'yxatdan chiqarilgan";
+    }
     if (!flag && r.snap_quartile && r.quartile && QRANK[r.quartile] > QRANK[r.snap_quartile]) {
       flag = 'downgraded'; reason = `Kvartil pasaygan: ${r.snap_quartile} → ${r.quartile}`;
     }
-    if (flag) { upd.run(flag, reason, '', r.snap_quartile, r.id); flagged.push({ ...r, reason }); }
+    if (flag) { stmts.push([UPD, flag, reason, '', r.snap_quartile, r.id]); flagged.push({ ...r, reason }); }
     else if (r.snap_quartile && r.quartile && QRANK[r.quartile] < QRANK[r.snap_quartile]) {
-      upd.run('', '', 'upgraded', r.quartile, r.id); upgraded.push({ ...r });
-    } else upd.run('', '', '', r.quartile || r.snap_quartile, r.id);
+      stmts.push([UPD, '', '', 'upgraded', r.quartile, r.id]); upgraded.push({ ...r });
+    } else stmts.push([UPD, '', '', '', r.quartile || r.snap_quartile, r.id]);
   }
+  await db.batch(stmts);
+
   let added = 0;
   if (flagged.length) {
-    const exclude = db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category).map((r) => r.journal_id);
-    const picks = candidates(db, category, access, direction, profile.topic, exclude).slice(0, flagged.length);
+    const exclude = (await db.prepare('SELECT journal_id FROM user_journals WHERE user_id=? AND category=?').all(userId, category)).map((r) => r.journal_id);
+    const picks = (await candidates(db, category, access, direction, profile.topic, exclude)).slice(0, flagged.length);
     await addRows(db, userId, category, access, picks, direction, profile, flagged.map((f) => f.id));
     added = picks.length;
   }
@@ -153,13 +161,13 @@ async function refresh(db, userId, category, access, { syncFeeds } = {}) {
     : "Hech qanday o'zgarish aniqlanmadi — barcha tavsiyalar dolzarb.";
   if (feedMsg) summary += ` ${feedMsg}`;
   const aiNote = lines.length ? await ai.summarizeChanges(lines) : null;
-  db.prepare('INSERT INTO refresh_log(user_id,category,access,summary) VALUES(?,?,?,?)').run(userId, category, access, summary + (aiNote ? `\n${aiNote}` : ''));
+  await db.prepare('INSERT INTO refresh_log(user_id,category,access,summary) VALUES(?,?,?,?)').run(userId, category, access, summary + (aiNote ? `\n${aiNote}` : ''));
   return { summary, aiNote, flagged: flagged.length, upgraded: upgraded.length, added, lines };
 }
 
-/** Admin tomonidan master jurnal o'zgarganda tarixga yozish */
-function logChange(db, journalId, field, oldV, newV, source) {
-  db.prepare('INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) VALUES(?,?,?,?,?)').run(journalId, field, oldV == null ? '' : String(oldV), newV == null ? '' : String(newV), source);
-}
+/** Jurnal o'zgarishi tarixi: statement (batch uchun) va to'g'ridan-to'g'ri yozish */
+const changeStmt = (journalId, field, oldV, newV, source) =>
+  ['INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) VALUES(?,?,?,?,?)', journalId, field, oldV == null ? '' : String(oldV), newV == null ? '' : String(newV), source];
+const logChange = (db, ...args) => db.batch([changeStmt(...args)]);
 
-module.exports = { CATEGORIES, scoreJournal, candidates, ensureRecommendations, list, refresh, logChange, getProfileCtx, categoryFilterSql, COUNT };
+module.exports = { CATEGORIES, scoreJournal, candidates, candidatesFrom, matchesCategory, ensureRecommendations, list, refresh, logChange, changeStmt, getProfileCtx, COUNT };

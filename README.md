@@ -4,9 +4,39 @@ Tadqiqotchilar (doktorant, mustaqil izlanuvchi, yangi boshlovchi) uchun tavsiyav
 Scopus / OAK / yuqori impakt faktorli jurnallar va konferensiyalar, OAK minimal talablari,
 oyma-oy shaxsiy trayektoriya, himoya hujjatlari ro'yxati va sun'iy intellekt ko'magi.
 
-## Ishga tushirish
+## Cloudflare'ga joylash (GitHub → Cloudflare Workers)
 
-Faqat Node.js ≥ 22.5 kerak (tashqi paketlar yo'q; SQLite — `node:sqlite`).
+Platforma **Cloudflare Workers + D1 (SQLite) + statik fayllar** uchun moslangan. Server kodi `src/worker.mjs`, ma'lumotlar bazasi — D1 (`DB` bog'lanmasi),
+frontend — `public/` (Workers Static Assets). Sxema va boshlang'ich ma'lumotlar (jurnallar, talablar, hujjatlar) birinchi so'rovda **avtomatik** yaratiladi — migratsiya buyruqlari kerak emas.
+
+**1. D1 bazasini yaratish** (bir marta; ikkita yo'l):
+* *Avtomatik:* `wrangler.jsonc` da `database_id` ko'rsatilmagan — yangi wrangler deploy paytida bazani o'zi yaratadi.
+* *Qo'lda (agar avtomatik ishlamasa):* Cloudflare → Storage & Databases → D1 → **Create** (nom: `ilmiy-yuksalish`), keyin berilgan `database_id` ni `wrangler.jsonc` dagi `d1_databases` elementiga qo'shing: `"database_id": "…"`.
+
+**2. GitHub'dan ulash:** Cloudflare Dashboard → **Workers & Pages → Create → Import a repository** → shu repozitoriyni tanlang.
+* Branch: `main` (yoki kerakli branch) · Build command: bo'sh qoldiring · Deploy command: `npx wrangler deploy`
+* Har `git push` dan keyin avtomatik qayta joylanadi.
+
+**3. Maxfiy sozlamalar** — Worker → **Settings → Variables and Secrets** (*runtime*, «Build variables» emas!) da **Secret** sifatida qo'shing:
+
+| Nom | Majburiy | Izoh |
+|---|---|---|
+| `ADMIN_LOGIN` | ha | Admin logini (faqat sizda) |
+| `ADMIN_PASSWORD` | ha | Admin paroli — uzun va noyob tanlang. Secret berilmasa admin hisobi yaratilmaydi |
+| `ANTHROPIC_API_KEY` | yo'q | AI tahlillari uchun; bo'lmasa qoidaga asoslangan zaxira matnlar ishlaydi |
+| `AI_MODEL` | yo'q | Standart: `claude-sonnet-5-5` |
+| `SCOPUS_FEED_URL`, `OAK_FEED_URL` | yo'q | Jurnal fidlari (CSV/JSON), Refresh paytida 6 soatda bir marta olinadi |
+
+Parolni almashtirish uchun secret qiymatini o'zgartiring — keyingi so'rovda admin paroli yangilanadi.
+
+**Mahalliy sinash:** `npm run dev:cf` (`.dev.vars.example` ni `.dev.vars` ga nusxalab, ichiga ADMIN_LOGIN/ADMIN_PASSWORD yozing).
+
+**Cloudflare cheklovlari:** parol xeshlash (PBKDF2, 100 000 iteratsiya) va katta fid importi CPU talab qiladi. Workers **Free** rejasida (10 ms CPU) kirish/import «Exceeded CPU» xatosi bilan to'xtashi mumkin — shunda **Workers Paid** ($5/oy) rejasiga o'ting.
+Free rejada bitta so'rovga 50 ta ichki so'rov (D1 chaqiruvi) chegarasi bor; kod bunga moslab yozilgan (batch), lekin birinchi so'rovdagi boshlang'ich yuklash eng og'ir qism.
+
+## Mahalliy ishga tushirish (Node)
+
+Faqat Node.js ≥ 22.5 kerak (SQLite — `node:sqlite`; Cloudflare uchun `npm install` wrangler'ni o'rnatadi).
 
 ```bash
 export ADMIN_LOGIN=siz_tanlagan_login
@@ -25,7 +55,7 @@ Admin hisobini ro'yxatdan o'tish orqali yaratib bo'lmaydi — u faqat shu muhit 
 | `ANTHROPIC_API_KEY`, `AI_MODEL` | AI: jurnal moslik tahlili, motivatsiya xabari, reja maslahati, OAK ro'yxatini matndan ajratish |
 | `SCOPUS_FEED_URL` | SCImago/Scopus kvartillari CSV yoki JSON manzili |
 | `OAK_FEED_URL` | OAK ro'yxati (JSON/CSV) manzili |
-| `DATA_DIR`, `PORT`, `COOKIE_SECURE=1` | Ma'lumotlar papkasi, port, HTTPS ortida `Secure` cookie |
+| `DATA_DIR`, `PORT` | Mahalliy rejimda ma'lumotlar papkasi va port |
 
 ## Imkoniyatlar
 

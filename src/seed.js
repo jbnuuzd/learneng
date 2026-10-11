@@ -264,36 +264,35 @@ const quotes = [
 
 const SEED_VERSION = 2;
 
-function seedAll(db) {
-  const { getSetting, setSetting } = require('./db');
-  const ins = (table, obj) => {
-    const keys = Object.keys(obj);
-    db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`).run(...keys.map((k) => obj[k]));
-  };
-  const n = (t) => db.prepare(`SELECT COUNT(*) c FROM ${t}`).get().c;
-  const version = Number(getSetting(db, 'seed_version', '0'));
+const insertStmt = (table, obj, ignore = true) => {
+  const keys = Object.keys(obj);
+  return [`INSERT ${ignore ? 'OR IGNORE ' : ''}INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`, ...keys.map((k) => obj[k])];
+};
+
+/**
+ * Boshlang'ich ma'lumotlarni yuklaydi / yangilaydi (versiyalangan). Admin tahrirlagan yozuvlarga tegmaydi.
+ * Barcha qo'shishlar INSERT OR IGNORE — bir vaqtda ishga tushgan bir nechta izolyat (Workers) buzmaydi.
+ */
+async function seedAll(db) {
+  const { getSetting, setSetting, batchChunked } = require('./db');
+  const version = Number(await getSetting(db, 'seed_version', '0'));
   if (version >= SEED_VERSION) return;
-  db.exec('BEGIN');
-  try {
-    // yangi o'rnatishda yoki yangilashda — mavjud (admin tahrirlagan) yozuvlarga tegmasdan, yetishmayotganlarini qo'shamiz
-    for (const d of directions) if (!db.prepare('SELECT 1 FROM directions WHERE code=?').get(d.code)) ins('directions', d);
-    const have = new Set(db.prepare('SELECT lower(name) n FROM journals').all().map((r) => r.n));
-    for (const j of journals) if (!have.has(j.name.toLowerCase())) { ins('journals', j); have.add(j.name.toLowerCase()); }
-    for (const [key, category, title, description, phase, required, cancelled_from] of docs) {
-      const row = db.prepare('SELECT id FROM doc_templates WHERE key=?').get(key);
-      if (!row) ins('doc_templates', { key, category, title, description, phase, required, cancelled_from });
-      else if (version < 2) db.prepare('UPDATE doc_templates SET category=?, title=?, description=?, phase=?, required=?, cancelled_from=? WHERE id=?').run(category, title, description, phase, required, cancelled_from, row.id);
-    }
+  const stmts = [];
+  for (const d of directions) stmts.push(insertStmt('directions', d));
+  for (const j of journals) stmts.push(insertStmt('journals', j));
+  for (const [key, category, title, description, phase, required, cancelled_from] of docs) {
+    stmts.push(insertStmt('doc_templates', { key, category, title, description, phase, required, cancelled_from }));
+    if (version < 2) stmts.push(['UPDATE doc_templates SET category=?, title=?, description=?, phase=?, required=?, cancelled_from=? WHERE key=?', category, title, description, phase, required, cancelled_from, key]);
+  }
+  if (version < 2) {
     // tekshirilmagan (namuna) talablar rasmiy ma'lumotnoma bilan almashtiriladi; admin tasdiqlaganlari saqlanadi
-    if (version < 2) {
-      db.prepare("DELETE FROM requirements WHERE verified=0").run();
-      for (const r of requirements) if (!db.prepare('SELECT 1 FROM requirements WHERE degree=? AND kind=?').get(r.degree, r.kind)) ins('requirements', r);
-      db.prepare("DELETE FROM journals WHERE verified=0 AND name IN ('Iqtisodiyot va ta’lim','Iqtisodiyot va innovatsion texnologiyalar','Moliya va bank ishi')").run();
-    }
-    if (!n('quotes')) quotes.forEach(([author, text, note]) => ins('quotes', { author, text, note }));
-    setSetting(db, 'seed_version', SEED_VERSION);
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+    stmts.push(['DELETE FROM requirements WHERE verified=0']);
+    for (const r of requirements) stmts.push(insertStmt('requirements', r));
+    stmts.push(["DELETE FROM journals WHERE verified=0 AND name IN ('Iqtisodiyot va ta’lim','Iqtisodiyot va innovatsion texnologiyalar','Moliya va bank ishi')"]);
+  }
+  for (const [author, text, note] of quotes) stmts.push(insertStmt('quotes', { author, text, note }));
+  await batchChunked(db, stmts, 60);
+  await setSetting(db, 'seed_version', SEED_VERSION);
 }
 
 module.exports = { seedAll, directions, journals };

@@ -5,8 +5,8 @@
  *            OAK_FEED_URL     — JSON massiv yoki CSV (name;issn;...)
  * yoki admin kabinetidan fayl/matn yuklash. Har bir o'zgarish journal_changes jadvaliga yoziladi.
  */
-const { logChange } = require('./recommend');
-const { getSetting, setSetting } = require('./db');
+const { changeStmt } = require('./recommend');
+const { getSetting, setSetting, batchChunked } = require('./db');
 
 function parseCsv(text) {
   const firstLine = text.split(/\r?\n/, 1)[0];
@@ -60,55 +60,52 @@ function parseFeed(text) {
  * source: 'scopus' | 'oak'
  * mode:  'full'  — manbada yo'q, lekin bazada faol bo'lgan jurnallar "chiqib ketgan" deb belgilanadi (to'liq ro'yxat uchun)
  *        'delta' — faqat berilgan yozuvlar yangilanadi
+ * Barcha yozuvlar bitta (bo'laklangan) batch bilan bajariladi — D1 so'rovlar sonini tejaydi.
  */
-function applyFeed(db, items, source, { mode = 'delta', addNew = false } = {}) {
-  const all = db.prepare('SELECT * FROM journals').all();
+async function applyFeed(db, items, source, { mode = 'delta', addNew = false } = {}) {
+  const all = await db.prepare('SELECT * FROM journals').all();
   const byIssn = new Map(all.filter((j) => j.issn).map((j) => [normIssn(j.issn), j]));
   const byName = new Map(all.map((j) => [clean(j.name), j]));
   const seen = new Set();
   const stats = { updated: 0, added: 0, delisted: 0, unchanged: 0 };
+  const stmts = [];
   const set = (j, field, val) => {
     if (String(j[field] ?? '') === String(val ?? '')) return false;
-    db.prepare(`UPDATE journals SET ${field}=?, updated_at=datetime('now') WHERE id=?`).run(val, j.id);
-    logChange(db, j.id, field, j[field], val, `feed:${source}`);
+    stmts.push([`UPDATE journals SET ${field}=?, updated_at=datetime('now') WHERE id=?`, val, j.id]);
+    stmts.push(changeStmt(j.id, field, j[field], val, `feed:${source}`));
     j[field] = val;
     return true;
   };
-  db.exec('BEGIN');
-  try {
-    for (const it of items) {
-      if (!it.name) continue;
-      let j = (it.issn && byIssn.get(it.issn)) || byName.get(clean(it.name));
-      if (!j) {
-        if (!addNew) { stats.unchanged++; continue; }
-        const r = db.prepare(`INSERT INTO journals(name,issn,publisher,subjects,access,scopus_status,quartile,oak_status,country,verified) VALUES(?,?,?,?,?,?,?,?,?,1)`)
-          .run(it.name, it.issn, it.publisher, it.subjects, it.access === 'paid' ? 'paid' : 'free', source === 'scopus' ? 'active' : 'none', it.quartile, source === 'oak' ? 'active' : 'none', source === 'oak' ? "O'zbekiston" : '');
-        stats.added++;
-        j = db.prepare('SELECT * FROM journals WHERE id=?').get(Number(r.lastInsertRowid));
-        logChange(db, j.id, 'created', '', it.name, `feed:${source}`);
-        seen.add(j.id);
-        continue;
-      }
-      seen.add(j.id);
-      let changed = false;
-      if (source === 'scopus') {
-        changed = set(j, 'scopus_status', it.scopus_status || 'active') || changed;
-        if (it.quartile) changed = set(j, 'quartile', it.quartile) || changed;
-      } else if (source === 'oak') {
-        changed = set(j, 'oak_status', it.oak_status || 'active') || changed;
-      }
-      if (it.issn && !j.issn) set(j, 'issn', it.issn);
-      if (changed) { db.prepare('UPDATE journals SET verified=1 WHERE id=?').run(j.id); stats.updated++; } else stats.unchanged++;
+  const createdNames = new Set();
+  for (const it of items) {
+    if (!it.name) continue;
+    let j = (it.issn && byIssn.get(it.issn)) || byName.get(clean(it.name));
+    if (!j) {
+      if (!addNew || createdNames.has(it.name.toLowerCase())) { stats.unchanged++; continue; }
+      createdNames.add(it.name.toLowerCase());
+      stmts.push([`INSERT OR IGNORE INTO journals(name,issn,publisher,subjects,access,scopus_status,quartile,oak_status,country,verified) VALUES(?,?,?,?,?,?,?,?,?,1)`,
+        it.name, it.issn, it.publisher, it.subjects, it.access === 'paid' ? 'paid' : 'free', source === 'scopus' ? 'active' : 'none', it.quartile, source === 'oak' ? 'active' : 'none', source === 'oak' ? "O'zbekiston" : '']);
+      stmts.push(['INSERT INTO journal_changes(journal_id,field,old_value,new_value,source) SELECT id,\'created\',\'\',name,? FROM journals WHERE name=?', `feed:${source}`, it.name]);
+      stats.added++;
+      continue;
     }
-    if (mode === 'full') {
-      const col = source === 'scopus' ? 'scopus_status' : 'oak_status';
-      const gone = source === 'scopus' ? 'discontinued' : 'removed';
-      for (const j of all) {
-        if (j[col] === 'active' && !seen.has(j.id)) { set(j, col, gone); stats.delisted++; }
-      }
+    seen.add(j.id);
+    let changed = false;
+    if (source === 'scopus') {
+      changed = set(j, 'scopus_status', it.scopus_status || 'active') || changed;
+      if (it.quartile) changed = set(j, 'quartile', it.quartile) || changed;
+    } else if (source === 'oak') {
+      changed = set(j, 'oak_status', it.oak_status || 'active') || changed;
     }
-    db.exec('COMMIT');
-  } catch (e) { db.exec('ROLLBACK'); throw e; }
+    if (it.issn && !j.issn) set(j, 'issn', it.issn);
+    if (changed) { stmts.push(['UPDATE journals SET verified=1 WHERE id=?', j.id]); stats.updated++; } else stats.unchanged++;
+  }
+  if (mode === 'full') {
+    const col = source === 'scopus' ? 'scopus_status' : 'oak_status';
+    const gone = source === 'scopus' ? 'discontinued' : 'removed';
+    for (const j of all) if (j[col] === 'active' && !seen.has(j.id)) { set(j, col, gone); stats.delisted++; }
+  }
+  await batchChunked(db, stmts, 80);
   return stats;
 }
 
@@ -120,14 +117,14 @@ async function syncConfiguredFeeds(db, { force = false } = {}) {
   for (const [source, envName] of [['scopus', 'SCOPUS_FEED_URL'], ['oak', 'OAK_FEED_URL']]) {
     const url = process.env[envName];
     if (!url) continue;
-    const last = Number(getSetting(db, `feed_last_${source}`, '0'));
+    const last = Number(await getSetting(db, `feed_last_${source}`, '0'));
     if (!force && Date.now() - last < 6 * 3600e3) continue;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(60000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const items = parseFeed(await res.text());
-      const stats = applyFeed(db, items, source, { mode: process.env[`${envName}_FULL`] === '1' ? 'full' : 'delta' });
-      setSetting(db, `feed_last_${source}`, Date.now());
+      const stats = await applyFeed(db, items, source, { mode: process.env[`${envName}_FULL`] === '1' ? 'full' : 'delta' });
+      await setSetting(db, `feed_last_${source}`, Date.now());
       out.push(`${source.toUpperCase()} fidi: ${describe(stats)}`);
     } catch (e) { out.push(`${source.toUpperCase()} fidini yuklab bo'lmadi (${e.message})`); }
   }
