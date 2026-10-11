@@ -131,10 +131,10 @@ export async function generateJSON(prompt, { system = '', audio = null, grounded
   return parseJsonLoose(textOf(await call('text', body, grounded ? 90000 : timeout, { fast })));
 }
 
-export async function generateText(prompt, { system = '', temperature = 0.7, history = [], timeout = 60000 } = {}) {
+export async function generateText(prompt, { system = '', temperature = 0.7, history = [], timeout = 60000, fast = false } = {}) {
   const contents = [...history, { role: 'user', parts: [{ text: prompt }] }];
   const body = { systemInstruction: { parts: [{ text: (system ? system + '\n' : '') + GUARD }] }, contents, generationConfig: { temperature } };
-  return textOf(await call('text', body, timeout)).trim();
+  return textOf(await call('text', body, timeout, { fast })).trim();
 }
 
 // ---- Text to speech -------------------------------------------------------
@@ -157,12 +157,22 @@ async function synthesize(text, { voice = 'Kore', speakers = null, style = '' } 
   const speechConfig = speakers && speakers.length === 2
     ? { multiSpeakerVoiceConfig: { speakerVoiceConfigs: speakers.map((s) => ({ speaker: s.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: s.voice } } })) } }
     : { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } };
-  const data = await call('tts', {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { responseModalities: ['AUDIO'], speechConfig },
-  }, 90000);
-  const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
-  if (!part) throw new AiError('failed', 'TTS audio qaytarmadi');
+  let part, why = '';
+  for (let attempt = 0; attempt < 3 && !part; attempt++) {
+    const data = await call('tts', {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['AUDIO'], speechConfig },
+    }, 90000);
+    const cand = data?.candidates?.[0];
+    part = cand?.content?.parts?.find((p) => p.inlineData);
+    if (!part) {   // 200 OK without audio: remember why (finish reason / block reason / returned text) and retry, then try a newer TTS model
+      why = [cand?.finishReason && `finishReason=${cand.finishReason}`, data?.promptFeedback?.blockReason && `blockReason=${data.promptFeedback.blockReason}`, cand?.content?.parts?.[0]?.text && `text="${cand.content.parts[0].text.slice(0, 60)}"`, !cand && 'candidates yo\'q'].filter(Boolean).join(', ');
+      if (attempt === 1) {
+        try { const alt = pickModel('tts', await listModels()); if (alt && alt !== effective('tts')) { console.error(`[gemini] ${effective('tts')} gives no audio, trying ${alt}`); aiState.models.tts = alt; } } catch { /* keep current */ }
+      }
+    }
+  }
+  if (!part) throw new AiError('failed', `TTS audio qaytarmadi (${effective('tts')}${why ? ': ' + why : ''})`);
   const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || '')?.[1] || 24000);
   return pcmToWav(fromB64(part.inlineData.data), rate);
 }
@@ -255,8 +265,8 @@ export async function runAiChecks() {
   const silent = pcmToWav(new Uint8Array(9600), 16000);
   const b64 = btoa(String.fromCharCode(...silent));
   const tests = {
-    text: await time(async () => (await generateText('Reply with the single word OK.', { temperature: 0 })).slice(0, 40)),
-    audio: await time(async () => { await generateJSON('The audio is silent. Return JSON {"ok":true}.', { audio: { mime: 'audio/wav', data: b64 } }); return 'audio input accepted'; }),
+    text: await time(async () => (await generateText('Reply with the single word OK.', { temperature: 0, fast: true })).slice(0, 40)),
+    audio: await time(async () => { await generateJSON('The audio is silent. Return JSON {"ok":true}.', { audio: { mime: 'audio/wav', data: b64 }, fast: true }); return 'audio input accepted'; }),
     tts: await time(async () => `${(await synthesize('Hello.', { voice: 'Kore' })).length} bytes`),
   };
   const errs = Object.values(tests).filter((t) => !t.ok).map((t) => t.error).join(' | ');
