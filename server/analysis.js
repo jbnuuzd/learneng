@@ -69,11 +69,13 @@ export async function analyseGoal(userId, today) {
     return { skill: s, name: SKILL_UZ[s], current: a == null ? null : describe(a), gap: a == null ? null : Math.round(Math.max(0, t - a)), plannedHours: Math.round(planned / 6) / 10 };
   });
 
-  const score =
-    0.45 * clamp(hoursRatio, 0, 1.2) / 1.2 + 0.3 * clamp(vocabCoverage, 0, 1) + 0.15 * grammarCoverage + 0.1 * clamp(adherence, 0, 1);
-  // map the composite to a probability-like figure; deliberately conservative
-  const chance = Math.round(clamp(1 / (1 + Math.exp(-(score - 0.62) * 9)), 0.02, 0.97) * 100);
-  const verdict = hoursRatio >= 1 && vocabCoverage >= 0.8 ? 'realistic' : hoursRatio >= 0.6 && vocabCoverage >= 0.5 ? 'stretch' : 'unrealistic';
+  // Deliberately conservative: 50% when the effective hours equal the bare minimum, never above 90%.
+  const pHours = 1 / (1 + Math.exp(-2.2 * (hoursRatio - 1)));
+  const fVocab = clamp(0.6 + 0.4 * clamp(vocabCoverage, 0, 1), 0.6, 1);
+  const fGrammar = clamp(0.7 + 0.3 * grammarCoverage, 0.7, 1);
+  const fAdherence = 0.75 + 0.25 * clamp(adherence, 0, 1);
+  const chance = Math.round(clamp(pHours * fVocab * fGrammar * fAdherence, 0.02, 0.9) * 100);
+  const verdict = chance >= 65 ? 'realistic' : chance >= 35 ? 'stretch' : 'unrealistic';
 
   const metrics = {
     ready: true, today, daysTotal, daysLeft, target: { cefr: goal.target_cefr, ielts: goal.target_ielts }, current: describe(cur),

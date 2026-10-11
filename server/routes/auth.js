@@ -65,7 +65,7 @@ export function registerAuth(r) {
     return { ok: true };
   }, { auth: false });
 
-  r.get('/api/me', ({ user, date }) => meState(q.get('SELECT * FROM users WHERE id=?', user.id), date));
+  r.get('/api/me', ({ user, date }) => (user ? meState(q.get('SELECT * FROM users WHERE id=?', user.id), date) : { user: null }), { auth: false });
 
   r.post('/api/me/teacher', ({ user, body }) => {
     if (user.role !== 'student') throw new HttpError(403, "Faqat o'quvchilar uchun");

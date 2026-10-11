@@ -8,7 +8,8 @@ import { units, topicCatalog } from './lib/content.js';
 export const VOCAB = { nTopic: 40, nGeneral: 12 };          // 52 new words / day (>= 50), 40 of them from one IELTS topic
 export const VOCAB_MINUTES = 48;
 export const NEW_WORDS_PER_DAY = VOCAB.nTopic + VOCAB.nGeneral;
-export const HOURS_PER_LEVEL = 170;                          // ~guided learning hours per CEFR level (Cambridge estimate 150–200)
+export const HOURS_PER_LEVEL = 200;                          // ~guided learning hours per CEFR level (Cambridge's commonly quoted figure)
+export const SAFETY = 1.35;                                  // plan for more than the bare minimum: people differ and miss days
 export const POINTS_PER_LEVEL = 20;
 const MIN_M = { grammar: 30, reading: 20, listening: 20, speaking: 15, writing: 20 };
 const MAX_M = { grammar: 110, reading: 45, listening: 45, speaking: 40, writing: 50 };
@@ -36,9 +37,9 @@ export function previewGoal({ current, target, start, deadline, skills = {} }) {
   const levels = gapPoints / POINTS_PER_LEVEL;
   const requiredHours = Math.max(20, Math.round(levels * HOURS_PER_LEVEL));
   const effective = 0.85;                                    // allow for missed days
-  const rec = clamp(Math.ceil((requiredHours / (days * effective)) * 2) / 2, 2.5, 12);
+  const rec = clamp(Math.ceil(((requiredHours * SAFETY) / (days * effective)) * 2) / 2, 2.5, 12);
   return { days, gapPoints: Math.round(gapPoints * 10) / 10, gapLevels: Math.round(levels * 100) / 100, requiredHours, recommendedHoursPerDay: rec,
-    minHoursForWords: 1.5, realistic: rec <= 6, stretch: rec > 6 && rec <= 8, unrealistic: rec > 8 };
+    minHoursForWords: 1.5, realistic: rec <= 5, stretch: rec > 5 && rec <= 7, unrealistic: rec > 7 };
 }
 
 // ---- plan generation --------------------------------------------------------------
@@ -81,8 +82,7 @@ export function generatePlan({ userId, goal, from, assignedBy = null }) {
   const plan = []; // [{date, tasks:[{type, minutes}]}]
   for (let d = 0; d < days; d++) {
     const date = addDays(start, d);
-    const dow = new Date(date + 'T00:00:00Z').getUTCDay();
-    const light = dow === 0 && days > 21 ? 0.6 : 1;           // lighter Sundays on long plans
+    const light = 1; // every day carries the full daily budget
     const tasks = [];
     for (const c of ORDER) acc[c] += rem * light * sh[c];
     for (const c of ORDER) {

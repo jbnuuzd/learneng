@@ -6,6 +6,7 @@ import { toCefr, toIelts, ieltsToAbility, cefrToAbility, describe, LEVELS, goalA
 import { previewGoal, generatePlan, activePlan, weakTopics, NEW_WORDS_PER_DAY, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
 import { analyseGoal } from '../analysis.js';
+import { unitById } from '../lib/content.js';
 
 export function resolveTarget(body) {
   let cefr = LEVELS.includes(body.targetCefr) ? body.targetCefr : null;
@@ -59,7 +60,7 @@ export function progressFor(userId, today) {
   return {
     overall: o == null ? null : describe(o),
     skills: SKILLS.map((s) => ({ skill: s, name: SKILL_UZ[s], ...(ab[s] != null ? describe(ab[s]) : { ability: null }) })),
-    history: history(userId), stats: statsFor(userId, today), weakTopics: weakTopics(userId), recent,
+    history: history(userId), stats: statsFor(userId, today), weakTopics: weakTopics(userId).map((id) => ({ id, title: unitById[id]?.title || id })), recent,
   };
 }
 

@@ -118,18 +118,20 @@ export function registerTts(text, { voice = 'Kore', speakers = null, style = '' 
 }
 export const lookupTts = (id) => registry.get(id) || null;
 
+const plainText = (t) => t.replace(/^TTS the following conversation between .*?:\n/, '');
+
 // Returns { wav: Buffer } or { fallback: true, text } so the browser can use speechSynthesis.
 export async function ttsAudio(id) {
   const entry = registry.get(id);
   if (!entry) return null;
   const file = path.join(ttsDir(), id + '.wav');
   if (fs.existsSync(file)) return { file };
-  if (!aiEnabled()) return { fallback: true, text: entry.text, voice: entry.voice };
+  if (!aiEnabled()) return { fallback: true, text: plainText(entry.text), voice: entry.voice };
   try {
     const wav = await synthesize(entry.text, entry);
     fs.writeFileSync(file, wav);
     return { file };
   } catch {
-    return { fallback: true, text: entry.text, voice: entry.voice };
+    return { fallback: true, text: plainText(entry.text), voice: entry.voice };
   }
 }

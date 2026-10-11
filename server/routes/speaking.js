@@ -46,7 +46,7 @@ Rules: reply in English only, in character, at most 3 short sentences (max ~50 w
 }
 
 const fallbackQs = {
-  free: ['Hello! Tell me a little about yourself.', 'What do you usually do in your free time?', 'What was the best part of your week?', 'Tell me about a place you would like to visit.', 'What are your plans for the weekend?'],
+  free: ['Tell me a little about yourself.', 'What do you usually do in your free time?', 'What was the best part of your week?', 'Tell me about a place you would like to visit.', 'What are your plans for the weekend?'],
   ielts1: ['Let\'s talk about where you live. Do you live in a house or a flat?', 'What do you like about your hometown?', 'Do you work or are you a student?', 'What do you do in your free time?', 'Do you prefer mornings or evenings? Why?'],
   ielts2: ['Describe a person who has influenced you. You should say who the person is, how you know them, what they are like, and explain why they influenced you.'],
   ielts3: ['Why do some people find it hard to learn languages?', 'How has technology changed the way people communicate?', 'Do you think education systems should change?'],
@@ -105,7 +105,7 @@ export function registerSpeaking(r) {
     }
     if (!text) {
       const list = fallbackQs[mode] || fallbackQs.free;
-      text = `${personaById[persona].emoji} Hello, I'm ${personaById[persona].name}. ${list[0]}`;
+      text = `Hello, I'm ${personaById[persona].name}. ${list[0]}`;
     }
     saveTurns(id, [{ role: 'ai', text }]);
     const row = q.get('SELECT * FROM speaking_sessions WHERE id=?', id);

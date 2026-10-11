@@ -25,7 +25,9 @@ test('auth: register teacher + student, validation, session', async () => {
   assert.equal(r.status, 200); assert.equal(r.data.user.teacher.name, 'Ustoz Karim');
   assert.equal(r.data.ai, false);
   r = await new Client(srv.base, date).get('/api/me');
-  assert.equal(r.status, 401);
+  assert.equal(r.status, 200); assert.equal(r.data.user, null);
+  assert.equal((await new Client(srv.base, date).get('/api/plan')).status, 401);
+  assert.equal((await new Client(srv.base, date).get('/api/teacher/students')).status, 401);
   r = await new Client(srv.base, date).post('/api/auth/login', { email: 'ali@example.com', password: 'wrong' });
   assert.equal(r.status, 401);
 });
