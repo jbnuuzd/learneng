@@ -80,6 +80,8 @@ BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq,
 
 **Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
 
+**Lingo (boyqush):** bosh sahifada animatsiyali personaj — ko'zlari kursorga qaraydi, ko'z qisadi, qanot silkitadi, gapirganda tumshug'i harakatlanadi. U bilan yozib suhbatlashasiz (inglizcha/o'zbekcha): oddiy inglizcha javob + o'zbekcha tarjima + xatolaringizni tuzatish + ovozli javob. Kalit bo'lmasa tayyor oddiy javoblar beradi.
+
 **Dizayn:** yorug'/tungi/avto mavzu (menyuda almashtiriladi), bosh sahifada gradient «hero» blok, telefonda pastki menyu paneli, yengil animatsiyalar va yaxshilangan fokus/hover holatlari.
 
 **Yangi (3):** 🗣 talaffuz mashqi (gapni o'qing → AI har so'zni baholaydi, xatolarni tuzatish bo'yicha maslahat beradi; 8 xil qiyin tovush guruhi).

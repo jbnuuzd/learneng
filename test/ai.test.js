@@ -30,6 +30,7 @@ function reply(body) {
   if (text.includes('listening script')) return json({ title: 'Fake Dialogue', speakers: ['Anna', 'Tom'], lines: [['Anna', 'Hello Tom, how are you today?'], ['Tom', 'I am fine, thank you very much.']], questions: READING.questions });
   if (text.includes('vocabulary items')) { const tag = /topic "([^"]+)"/.exec(text)?.[1]?.slice(0, 5).replace(/\W/g, '') || 'x'; return json({ words: WORDS(40, tag) }); }
   if (text.includes('writing task') || text.includes('speaking task')) return json({ prompt: 'GEN PROMPT about environment', minWords: 80, maxWords: 120, seconds: 45 });
+  if (text.includes("Learner's new message")) return json({ reply: 'Hi! I am fine. And you?', uz: 'Salom! Yaxshiman. Siz-chi?', fix: 'I am agree → I agree' });
   if (text.includes('Conversation so far')) return json({ transcript: 'I like football.', reply: 'Nice! Why do you like it?', notes: [{ original: 'I like football very much', corrected: 'I really like football', why: 'ravish' }], hint: '', end: false });
   if (text.includes('Begin the session now')) return plain('Hello! I am your partner. What is your name?');
   if (text.includes('Assess this spoken English practice session')) return json({ cefr: 'B1', band: 5.5, criteria: { fluency: 5.5, lexical: 5, grammar: 5, pronunciation_estimate: 5.5 }, summary: 'REPORT-SUMMARY ' + sys, strengths: ['a'], weaknesses: ['b'], mistakes: [{ original: 'x', corrected: 'y', why: 'z' }], goodPhrases: ['nice'], recommendations: ['practise'], vocabularySuggestions: [{ w: 'thrilled', uz: 'xursand', ex: 'I am thrilled.' }] });
@@ -206,4 +207,15 @@ test('pronunciation trainer: sentences by sound, Gemini scores a recording, ids 
   assert.ok(call.body.contents[0].parts[0].text.includes(s.text)); assert.equal(call.body.contents[0].parts[1].inlineData.mimeType, 'audio/wav');
   assert.equal((await student.post('/api/trainers/pronunciation/check', { id: 9999, wav: 'AAAA' })).status, 400);
   assert.equal((await student.post('/api/trainers/pronunciation/check', { id: s.id })).status, 400);
+});
+
+test('Lingo the owl: chat reply with Uzbek gloss, correction and audio; bad input rejected', async () => {
+  let r = await student.post('/api/buddy/chat', { message: 'Hello, how are you', history: [{ role: 'ai', text: 'Hi!' }, { role: 'me', text: 'x'.repeat(1000) }] });
+  assert.equal(r.status, 200); assert.equal(r.data.ai, true); assert.match(r.data.reply, /fine/); assert.match(r.data.uz, /Yaxshiman/); assert.match(r.data.fix, /agree/);
+  assert.match(r.data.audio, /^[0-9a-f]{32}$/);
+  const call = seen.filter((s) => s.body.contents[0].parts[0].text.includes("Learner's new message")).at(-1);
+  assert.match(call.body.systemInstruction.parts[0].text, /Lingo/); assert.ok(call.body.contents[0].parts[0].text.includes('<student_text>Hello, how are you</student_text>'));
+  assert.ok(!call.body.contents[0].parts[0].text.includes('x'.repeat(301)), 'history items are truncated');
+  assert.equal((await student.post('/api/buddy/chat', { message: '  ' })).status, 400);
+  assert.equal((await teacher.post('/api/buddy/chat', { message: 'hi' })).status, 403);
 });

@@ -10,12 +10,13 @@ import { registerPlan } from './routes/plan.js';
 import { registerTasks } from './routes/tasks.js';
 import { registerTrainers } from './routes/trainers.js';
 import { registerSpeaking } from './routes/speaking.js';
+import { registerBuddy } from './routes/buddy.js';
 import { registerTeacher } from './routes/teacher.js';
 import { registerMaterials } from './routes/materials.js';
 import { registerMock } from './routes/mock.js';
 
 export const router = createRouter();
-[registerAuth, registerDiagnostic, registerPlan, registerTasks, registerTrainers, registerSpeaking, registerTeacher, registerMaterials, registerMock].forEach((r) => r(router));
+[registerAuth, registerDiagnostic, registerPlan, registerTasks, registerTrainers, registerSpeaking, registerBuddy, registerTeacher, registerMaterials, registerMock].forEach((r) => r(router));
 
 const SECURITY = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin' };
 
