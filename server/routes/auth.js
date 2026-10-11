@@ -105,12 +105,13 @@ export function registerAuth(r) {
   r.post('/api/ai/keys', async ({ user, body }) => {
     if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
     rateLimit(user.id, 'aikey', 20);
-    const keys = String(body.key || '').split(/[\s,;]+/).filter(Boolean);
+    // tolerate quotes and a pasted "GEMINI_API_KEY=" prefix
+    const keys = String(body.key || '').split(/[\s,;]+/).map((k) => k.replace(/^[A-Za-z_]+=/, '').replace(/^["'`]+|["'`]+$/g, '')).filter(Boolean);
     if (!keys.length || keys.length > 10) throw bad('Kalitni kiriting (bir vaqtda 10 tagacha)');
     const label = String(body.label || '').trim().slice(0, 40);
     let added = 0;
     for (const k of keys) {
-      if (!/^[A-Za-z0-9_-]{20,80}$/.test(k)) throw bad("Kalit shakli noto'g'ri (AI Studio'dagi «AIza…» kalitni to'liq nusxalang)");
+      if (!/^[\x21-\x7e]{20,200}$/.test(k) && !/["'<>\\]/.test(k)) throw bad("Kalit shakli noto'g'ri (bo'sh joy yoki ortiqcha belgi bo'lmasin; kamida 20 belgi)");
       if (allKeys().includes(k)) continue;
       await q.run('INSERT OR IGNORE INTO ai_keys(api_key,label,added_by) VALUES(?,?,?)', k, label, user.id); added++;
     }

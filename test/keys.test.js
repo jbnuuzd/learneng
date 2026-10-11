@@ -34,11 +34,12 @@ test('exhausted key is skipped; later calls go straight to the working key', asy
 test('teacher adds / lists / removes keys from the UI; added keys join the rotation', async () => {
   let r = await teacher.post('/api/ai/keys', { key: 'short' });
   assert.equal(r.status, 400);
+  assert.equal((await teacher.post('/api/ai/keys', { key: 'GEMINI_API_KEY="AQ.Ab8RN6Kdotted_Key-1234567890xyz"' })).data.added, 1, 'newer dotted key format + pasted prefix accepted');
   r = await teacher.post('/api/ai/keys', { key: 'UI-KEY-FOUR-ABCDEFGHIJKLMN', label: 'Ali' });
   assert.equal(r.data.added, 1);
-  const ui = r.data.keys.find((k) => k.source === 'ui');
-  assert.equal(ui.key, '…KLMN'); assert.ok(ui.id); assert.ok(!JSON.stringify(r.data).includes('UI-KEY-FOUR'), 'full key never returned');
+  const ui = r.data.keys.find((k) => k.key === '…KLMN');
+  assert.ok(ui.id); assert.ok(!JSON.stringify(r.data).includes('UI-KEY-FOUR'), 'full key never returned');
   assert.equal((await teacher.post('/api/ai/keys', { key: 'UI-KEY-FOUR-ABCDEFGHIJKLMN' })).data.added, 0, 'duplicate ignored');
   r = await teacher.del('/api/ai/keys/' + ui.id);
-  assert.equal(r.data.keys.filter((k) => k.source === 'ui').length, 0);
+  assert.equal(r.data.keys.filter((k) => k.source === 'ui').length, 1);
 });
