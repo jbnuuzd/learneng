@@ -38,7 +38,7 @@ export function registerTasks(r) {
     if (!/^[0-9a-f]{32}$/.test(params.id)) throw new HttpError(404, 'Audio topilmadi');
     const a = await ttsAudio(params.id);
     if (!a) throw new HttpError(404, 'Audio topilmadi');
-    if (a.fallback) return { fallback: true, text: a.text };
+    if (a.fallback) return { fallback: true, text: a.text, lang: a.lang };
     return new Response(a.body, { headers: { 'content-type': 'audio/wav', 'content-length': String(a.size), 'cache-control': 'private, max-age=86400' } });
   });
 }

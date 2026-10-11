@@ -5,12 +5,14 @@ export function stopAudio() {
   if (current) { current.pause(); current = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
-function speak(text, rate = 1) {
+function speak(text, rate = 1, lang = 'en-US') {
   return new Promise((resolve) => {
     if (!('speechSynthesis' in window)) return resolve(false);
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = rate;
-    const v = speechSynthesis.getVoices().find((x) => x.lang.startsWith('en'));
+    u.lang = lang; u.rate = rate;
+    const voices = speechSynthesis.getVoices(), base = lang.slice(0, 2);
+    const v = voices.find((x) => x.lang.startsWith(base)) || (base === 'uz' ? voices.find((x) => x.lang.startsWith('tr')) : null);   // no Uzbek voice: Turkish reads Latin Uzbek acceptably
+    if (base !== 'en' && !v) return resolve(false);                        // never read Uzbek with an English voice
     if (v) u.voice = v;
     u.onend = () => resolve(true); u.onerror = () => resolve(false);
     speechSynthesis.speak(u);
@@ -24,12 +26,12 @@ export async function playAudio(id, rate = 1) {
     const res = await fetch('/api/tts/' + id, { credentials: 'same-origin' });
     if (!res.ok) throw new Error('Audio yuklanmadi');
     const ct = res.headers.get('content-type') || '';
-    entry = ct.includes('json') ? { text: (await res.json()).text } : { url: URL.createObjectURL(await res.blob()) };
+    entry = ct.includes('json') ? await res.json().then((j) => ({ text: j.text, lang: j.lang })) : { url: URL.createObjectURL(await res.blob()) };
     cache.set(id, entry);
   }
-  if (entry.text) return speak(entry.text, rate);
+  if (entry.text) return speak(entry.text, rate, entry.lang || 'en-US');
   const a = new Audio(entry.url); a.playbackRate = rate; current = a;
-  return new Promise((resolve) => { a.onended = () => resolve(true); a.onerror = () => resolve(false); a.play().catch(() => resolve(false)); });
+  return new Promise((resolve) => { a.onended = () => resolve(true); a.onerror = () => resolve(false); a.play().catch((e) => resolve(e?.name === 'NotAllowedError' ? 'blocked' : false)); });
 }
 
 // ---- recording -> 16 kHz mono WAV (base64) ---------------------------------------

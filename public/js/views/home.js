@@ -12,19 +12,13 @@ export function taskRow(t, { date } = {}) {
     h('div', { style: { textAlign: 'right' } }, h('div', {}, `≈ ${fmtMin(t.minutes)}`), t.status === 'partial' && h('span', { class: 'badge warn' }, `${t.stagesDone} bosqich`), t.status === 'done' && t.score != null && h('span', { class: 'badge ok' }, Math.round(t.score * 100) + '%')));
 }
 
-function greeting(name, st) {
-  const hr = new Date().getHours();
-  const part = hr < 5 ? 'Late night study? Respect' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  if (st.streak >= 3) return [`${part}, ${name}! ${st.streak} days in a row — amazing!`, `Ketma-ket ${st.streak} kun — ajoyib! Gaplashamizmi?`];
-  return [`${part}, ${name}! I am Lingo. Let's practise English together!`, "Men Lingo. Birga ingliz tilini mashq qilamiz — menga yozing!"];
-}
+let greeted = false;   // the welcome show plays once each time the site is opened (not on every return to the home page)
 
 function buddyCard(name, st) {
   const m = createMascot({ size: 170 });
-  const [en0, uz0] = greeting(name, st);
   const say = h('div', { class: 'say' });
   const showSay = (en, uz, fix) => mount(say, h('div', {}, en), uz && h('div', { class: 'uz' }, uz), fix && h('div', { class: 'fix' }, '✏️ ' + fix));
-  showSay(en0, uz0);
+  showSay("Xush kelibsiz, bilimdon! Bugun nimalarni o'rganamiz?");
   const log = h('div', { class: 'log' }); log.hidden = true;
   const input = h('input', { type: 'text', placeholder: 'Lingo ga yozing (inglizcha yoki o\'zbekcha)…', maxlength: 500, 'aria-label': 'Lingo ga xabar' });
   const history = []; let busy = false, muted = false;
@@ -44,11 +38,32 @@ function buddyCard(name, st) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(input.value); });
   const speaker = h('button', { class: 'btn secondary sm', type: 'button', title: 'Ovozni yoqish/o\'chirish', 'aria-label': 'Ovoz', onclick: () => { muted = !muted; speaker.textContent = muted ? '🔇' : '🔊'; if (muted) { stopAudio(); m.talk(false); } } }, '🔊');
   const sugg = ['Hello Lingo!', 'Give me a tip for IELTS speaking', 'Explain Present Perfect simply', 'Ask me a question'].map((s) => h('button', { class: 'pill', type: 'button', onclick: () => send(s) }, s));
-  setTimeout(() => m.wave(), 600);
+  // ---- welcome show: Lingo drops in, bows, waves, dances and says the greeting aloud (Uzbek)
+  const playBtn = h('button', { class: 'btn sm say-play', type: 'button' }, '🔊 Lingo salomini eshiting');
+  playBtn.hidden = true;
+  const speakGreeting = async (id) => {
+    m.talk(true); m.dance(true);
+    const res = await playAudio(id).catch(() => false);
+    m.talk(false); m.dance(false);
+    return res;
+  };
+  async function welcome() {
+    m.greet();
+    let g;
+    try { g = await api.get('/api/buddy/greeting'); } catch { return; }
+    await new Promise((r) => setTimeout(r, 1900));            // let the bow finish first
+    if (await speakGreeting(g.audio) === 'blocked') {          // browsers block sound until the first click/tap
+      playBtn.hidden = false;
+      const again = async () => { playBtn.hidden = true; m.greet(); await speakGreeting(g.audio); };
+      playBtn.onclick = again;
+      window.addEventListener('pointerdown', () => { if (!playBtn.hidden) again(); }, { once: true });
+    }
+  }
+  if (!greeted) { greeted = true; welcome(); } else setTimeout(() => m.wave(), 600);
   m.el.addEventListener('click', () => { m.wave(); m.cheer(); });
   m.el.style.cursor = 'pointer';
   return h('div', { class: 'card buddy' }, m.el,
-    h('div', {}, say, log, h('div', { class: 'sugg' }, sugg), h('div', { class: 'composer' }, input, speaker, h('button', { class: 'btn', type: 'button', onclick: () => send(input.value) }, 'Yuborish'))));
+    h('div', {}, say, playBtn, log, h('div', { class: 'sugg' }, sugg), h('div', { class: 'composer' }, input, speaker, h('button', { class: 'btn', type: 'button', onclick: () => send(input.value) }, 'Yuborish'))));
 }
 
 export async function homeView() {

@@ -247,13 +247,13 @@ export async function ttsAudio(id) {
     if (!row) return null;
     entry = JSON.parse(row.json);
   }
-  if (!aiEnabled()) return { fallback: true, text: plainText(entry.text), voice: entry.voice };
+  if (!aiEnabled()) return { fallback: true, text: plainText(entry.text), voice: entry.voice, lang: /Uzbek/i.test(entry.style || '') ? 'uz-UZ' : 'en-US' };
   if (!running) {
     const p = produce(id, entry, files, edge, key, cacheKey).then((w) => { if (!w) inflight.delete(id); return w; });
     running = { p, entry }; inflight.set(id, running);
   }
   const wav = await running.p;
-  if (!wav) { inflight.delete(id); return { fallback: true, text: plainText(entry.text), voice: entry.voice }; }
+  if (!wav) { inflight.delete(id); return { fallback: true, text: plainText(entry.text), voice: entry.voice, lang: /Uzbek/i.test(entry.style || '') ? 'uz-UZ' : 'en-US' }; }
   return { body: wav, size: wav.length };
 }
 

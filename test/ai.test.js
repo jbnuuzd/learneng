@@ -219,3 +219,12 @@ test('Lingo the owl: chat reply with Uzbek gloss, correction and audio; bad inpu
   assert.equal((await student.post('/api/buddy/chat', { message: '  ' })).status, 400);
   assert.equal((await teacher.post('/api/buddy/chat', { message: 'hi' })).status, 403);
 });
+
+test('Lingo welcome: fixed Uzbek greeting with its own audio id (cached for everyone)', async () => {
+  const r = await student.get('/api/buddy/greeting'); const r2 = await teacher.get('/api/buddy/greeting');
+  assert.equal(r.status, 200); assert.equal(r.data.text, "Xush kelibsiz, bilimdon! Bugun nimalarni o'rganamiz?");
+  assert.match(r.data.audio, /^[0-9a-f]{32}$/); assert.equal(r2.status, 403);
+  const a = await student.get('/api/tts/' + r.data.audio); assert.equal(a.status, 200);
+  const call = seen.filter((s) => s.body.generationConfig?.responseModalities).at(-1);
+  assert.match(call.body.contents[0].parts[0].text, /Uzbek.*Xush kelibsiz/);
+});

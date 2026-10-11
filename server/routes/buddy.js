@@ -16,7 +16,16 @@ const CANNED = [
 ];
 const cannedReply = (n) => CANNED[n % CANNED.length];
 
+export const GREETING_UZ = "Xush kelibsiz, bilimdon! Bugun nimalarni o'rganamiz?";
+
 export function registerBuddy(r) {
+  // Spoken welcome (pure Uzbek). Same text for everybody, so the audio is synthesised once and cached.
+  r.get('/api/buddy/greeting', async ({ waitUntil }) => {
+    const audio = registerTts(GREETING_UZ, { voice: 'Puck', style: 'Say in Uzbek, in a warm, cheerful, welcoming voice' });
+    prewarmTts(audio, waitUntil);
+    return { text: GREETING_UZ, audio };
+  }, { role: 'student' });
+
   r.post('/api/buddy/chat', async ({ user, body, waitUntil }) => {
     const text = String(body.message || '').trim().slice(0, 500);
     if (!text) throw bad('Xabar bo\'sh');
