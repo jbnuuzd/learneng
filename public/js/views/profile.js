@@ -7,9 +7,15 @@ export async function profileView() {
   const me = state.me, u = me.user;
   const mats = u.role === 'student' ? await api.get('/api/materials').catch(() => []) : [];
   const code = h('input', { type: 'text', placeholder: "O'qituvchi kodi", maxlength: 12 });
+  const cur = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'Joriy parol' });
+  const nxt = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, 'aria-label': 'Yangi parol' });
+  const pwCard = h('div', { class: 'card' }, h('h2', {}, 'Parolni almashtirish'),
+    h('div', { class: 'grid g2' }, h('div', { class: 'field' }, h('label', {}, 'Joriy parol'), cur), h('div', { class: 'field' }, h('label', {}, 'Yangi parol (kamida 8 belgi)'), nxt)),
+    h('button', { class: 'btn', onclick: async () => { try { await api.post('/api/me/password', { current: cur.value, next: nxt.value }); cur.value = ''; nxt.value = ''; toast('Parol almashtirildi ✓'); } catch (e) { toast(e.message, true); } } }, 'Almashtirish'));
   return h('div', {},
     h('h1', {}, 'Profil'),
     h('div', { class: 'card' }, h('table', { class: 't' }, h('tbody', {}, [['Ism', u.name], ['Email', u.email], ['Rol', u.role === 'teacher' ? "O'qituvchi" : "O'quvchi"]].map(([k, v]) => h('tr', {}, h('td', { class: 'muted' }, k), h('td', {}, h('b', {}, v))))))),
+    pwCard,
     u.role === 'student' ? h('div', {},
       h('div', { class: 'card' }, h('h2', {}, 'Fikr-mulohaza uslubi'), h('p', {}, "Mashg'ulotlardan keyingi AI fikr-mulohazasi uslubini o'qituvchingiz belgilaydi. Bugun: ", toneBadge(me.today.tone)),
         h('ul', { class: 'muted' }, Object.entries(me.tones).map(([k, v]) => h('li', {}, h('b', {}, v.label), ' — ', v.uz)))),

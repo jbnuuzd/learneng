@@ -250,6 +250,51 @@ test('teacher: overview, extra tasks, remedial, replan, notes, materials, isolat
   assert.equal((await s2.get(`/api/materials/${mid}/download`)).status, 404);
 });
 
+test('teacher dashboard uses grouped queries and matches the per-student numbers', async () => {
+  const { q } = await import('../server/lib/db.js');
+  const list = (await teacher.get('/api/teacher/students')).data.students;
+  assert.equal(list.length, 1);
+  const s = list[0];
+  const { statsFor } = await import('../server/routes/plan.js');
+  const stats = await statsFor(s.id, date);
+  assert.deepEqual(s.stats, stats);
+  const detail = (await teacher.get('/api/teacher/students/' + s.id)).data;
+  assert.deepEqual(detail.alerts.map((a) => a.code).sort(), s.alerts.map((a) => a.code).sort());
+  assert.equal(detail.student.todayTone, s.tone);
+  assert.equal(s.level.cefr, detail.level.cefr);
+});
+
+test('password change signs out other sessions; teacher can reset a student password', async () => {
+  const other = new Client(srv.base, date);
+  assert.equal((await other.post('/api/auth/login', { email: 'ali@example.com', password: 'password1' })).status, 200);
+  assert.equal((await student.post('/api/me/password', { current: 'wrong', next: 'newpassword1' })).status, 403);
+  assert.equal((await student.post('/api/me/password', { current: 'password1', next: 'short' })).status, 400);
+  assert.equal((await student.post('/api/me/password', { current: 'password1', next: 'newpassword1' })).status, 200);
+  assert.equal((await student.get('/api/plan')).status, 200, 'current device stays signed in');
+  assert.equal((await other.get('/api/plan')).status, 401, 'other device is signed out');
+  const sid = (await teacher.get('/api/teacher/students')).data.students[0].id;
+  const r = await teacher.post(`/api/teacher/students/${sid}/reset-password`);
+  assert.equal(r.status, 200); assert.equal(r.data.password.length, 10);
+  assert.equal((await student.get('/api/plan')).status, 401, 'student sessions revoked');
+  const again = new Client(srv.base, date);
+  assert.equal((await again.post('/api/auth/login', { email: 'ali@example.com', password: 'newpassword1' })).status, 401);
+  assert.equal((await again.post('/api/auth/login', { email: 'ali@example.com', password: r.data.password })).status, 200);
+  Object.assign(student, { cookie: again.cookie });
+});
+
+test('CSV export is attachment, neutralises formulas, and is teacher-only', async () => {
+  const sid = (await teacher.get('/api/teacher/students')).data.students[0].id;
+  const { q } = await import('../server/lib/db.js');
+  await q.run("INSERT INTO attempts(user_id,stage_key,stage_type,skill,score,feedback,tone) VALUES(?,?,?,?,?,?,?)", sid, 'x', 'text', 'grammar', 0.5, '=HYPERLINK("http://evil")', 'neutral');
+  let r = await teacher.get(`/api/teacher/students/${sid}/export.csv`);
+  assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /text\/csv/); assert.match(r.headers.get('content-disposition'), /attachment/);
+  const text = r.data.toString('utf8');
+  assert.ok(text.includes("\"'=HYPERLINK(") || text.includes("'=HYPERLINK("), 'formula neutralised');
+  assert.ok(!/(^|,)=HYPERLINK/m.test(text));
+  assert.equal((await teacher.get('/api/teacher/export.csv')).status, 200);
+  assert.equal((await student.get('/api/teacher/export.csv')).status, 403);
+});
+
 test('csrf: cross-origin POST is rejected', async () => {
   const r = await student.req('POST', '/api/plan/regenerate', {}, { origin: 'http://evil.example' });
   assert.equal(r.status, 403);

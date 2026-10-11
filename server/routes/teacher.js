@@ -6,7 +6,8 @@ import { describe, LEVELS } from '../lib/scale.js';
 import { TONES, isTone } from '../lib/ai.js';
 import { unitById, units, topicCatalog, topicById, loadVocabCache, topicPoolFrom, generalPoolFrom, growTopic, growGeneral } from '../lib/content.js';
 import { aiEnabled } from '../lib/gemini.js';
-import { rateLimit } from '../lib/auth.js';
+import { rateLimit, hashPassword } from '../lib/auth.js';
+import { studentsOverview, buildAlerts } from '../lib/overview.js';
 import { generatePlan, activePlan, weakTopics, VOCAB, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
 import { analyseGoal } from '../analysis.js';
@@ -22,17 +23,11 @@ async function myStudent(teacher, id) {
 }
 
 export async function alertsFor(studentId, today) {
-  const out = [];
   const from7 = addDays(today, -7);
-  const missed = (await q.get("SELECT COUNT(*) n FROM tasks WHERE user_id=? AND date<? AND date>=? AND status!='done'", studentId, today, from7)).n;
-  const planned = (await q.get('SELECT COUNT(*) n FROM tasks WHERE user_id=? AND date<? AND date>=?', studentId, today, from7)).n;
-  if (planned >= 3 && missed / planned >= 0.4) out.push({ level: 'danger', code: 'behind', text: `Oxirgi 7 kunda ${missed}/${planned} topshiriq bajarilmagan — grafikdan orqada.` });
+  const wk = await q.get("SELECT COUNT(*) planned, COALESCE(SUM(CASE WHEN status!='done' THEN 1 ELSE 0 END),0) missed FROM tasks WHERE user_id=? AND date<? AND date>=?", studentId, today, from7);
   const last = (await q.get('SELECT MAX(created_at) t FROM attempts WHERE user_id=?', studentId)).t;
-  if (!last) out.push({ level: 'warn', code: 'inactive', text: 'Hali birorta mashq bajarmagan.' });
-  else if (diffDays(last.slice(0, 10), today) >= 3) out.push({ level: 'warn', code: 'inactive', text: `${diffDays(last.slice(0, 10), today)} kundan beri faol emas.` });
   const low = await q.all("SELECT topic, AVG(score) a, COUNT(*) n FROM attempts WHERE user_id=? AND skill='grammar' AND score IS NOT NULL AND topic IS NOT NULL AND created_at>=datetime('now','-14 day') GROUP BY topic HAVING n>=2 AND a<0.6", studentId);
-  for (const l of low) out.push({ level: 'warn', code: 'weak-topic', unit: l.topic, text: `«${unitById[l.topic]?.title || l.topic}» mavzusida o'rtacha natija ${Math.round(l.a * 100)}%.` });
-  return out;
+  return buildAlerts({ today, planned7: wk.planned, missed7: wk.missed, last, low });
 }
 
 async function addTask(studentId, teacherId, { type, ref, date, minutes, note, source = 'teacher' }) {
@@ -90,19 +85,7 @@ async function applyRemedial(studentId, teacherId, unit, today) {
 export function registerTeacher(r) {
   const T = { role: 'teacher' };
 
-  r.get('/api/teacher/students', async ({ user, date }) => {
-    const rows = await q.all("SELECT id,name,email,feedback_tone,created_at FROM users WHERE role='student' AND teacher_id=? ORDER BY name", user.id);
-    return {
-      inviteCode: user.invite_code,
-      students: await Promise.all(rows.map(async (s) => {
-        const o = overall(await abilities(s.id));
-        const goal = await q.get('SELECT target_cefr,target_ielts,deadline FROM goals WHERE user_id=?', s.id);
-        const view = await dayView(s.id, date);
-        return { id: s.id, name: s.name, email: s.email, level: o == null ? null : describe(o), goal, tone: await effectiveTone(s.id, date), today: { percent: view.percent, minutes: view.totalMinutes },
-          alerts: await alertsFor(s.id, date), stats: await statsFor(s.id, date), lastActive: (await q.get('SELECT MAX(created_at) t FROM attempts WHERE user_id=?', s.id)).t };
-      })),
-    };
-  }, T);
+  r.get('/api/teacher/students', async ({ user, date }) => ({ inviteCode: user.invite_code, students: await studentsOverview(user.id, date) }), T);
 
   r.get('/api/teacher/students/:id', async ({ user, params, date }) => {
     const s = await myStudent(user, params.id);
@@ -218,6 +201,30 @@ export function registerTeacher(r) {
     units: units.map((u) => ({ id: u.id, title: u.title, level: u.level })),
     topics: topicCatalog.map((t) => ({ id: t.id, title: t.title, level: t.level })), levels: LEVELS,
   }), T);
+
+  // Teacher-initiated password reset (no e-mail service on the free plan): returns a one-time temporary password.
+  r.post('/api/teacher/students/:id/reset-password', async ({ user, params }) => {
+    const s = await myStudent(user, params.id);
+    const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const temp = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => alphabet[b % alphabet.length]).join('');
+    await q.run('UPDATE users SET pass_hash=? WHERE id=?', await hashPassword(temp), s.id);
+    await q.run('DELETE FROM sessions WHERE user_id=?', s.id);
+    return { password: temp };
+  }, T);
+
+  // CSV exports (cells starting with = + - @ are neutralised against spreadsheet formula injection).
+  const cell = (v) => { let t = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  const csv = (rows, name) => new Response('\uFEFF' + rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n', { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"`, 'cache-control': 'no-store' } });
+  r.get('/api/teacher/export.csv', async ({ user, date }) => {
+    const list = await studentsOverview(user.id, date);
+    return csv([['Ism', 'Email', 'CEFR', 'IELTS', 'Maqsad', 'Muddat', "Bajarilgan topshiriq", 'Daqiqa', "O'rganilgan so'z", 'Streak', "O'tkazib yuborilgan", 'Reja bajarilishi %', 'Oxirgi faollik'],
+      ...list.map((s) => [s.name, s.email, s.level?.cefr, s.level?.ielts, s.goal ? `${s.goal.target_cefr} / ${s.goal.target_ielts}` : '', s.goal?.deadline, s.stats.tasksDone, s.stats.minutesDone, s.stats.wordsLearned, s.stats.streak, s.stats.missed, s.stats.completionRate, s.lastActive])], `oquvchilar-${date}.csv`);
+  }, T);
+  r.get('/api/teacher/students/:id/export.csv', async ({ user, params, date }) => {
+    const s = await myStudent(user, params.id);
+    const rows = await q.all('SELECT created_at, skill, topic, stage_key, score, tone, ai, feedback FROM attempts WHERE user_id=? ORDER BY id', s.id);
+    return csv([['Sana', "Ko'nikma", 'Mavzu', 'Bosqich', 'Natija %', 'Uslub', 'AI', 'Fikr'], ...rows.map((a) => [a.created_at, a.skill, unitById[a.topic]?.title || a.topic, a.stage_key, a.score == null ? '' : Math.round(a.score * 100), a.tone, a.ai ? 'ha' : "yo'q", a.feedback])], `${s.name.replace(/[^\w-]+/g, '_')}-natijalar-${date}.csv`);
+  }, T);
 
   // Word bank: shows how many words each IELTS topic / level has and tops it up with Gemini (40 new words per click).
   r.get('/api/teacher/vocab', async () => {

@@ -1,6 +1,6 @@
 import { q } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
-import { hashPassword, verifyPassword, createSession, sessionCookie, newInviteCode } from '../lib/auth.js';
+import { hashPassword, verifyPassword, createSession, sessionCookie, newInviteCode, rateLimit } from '../lib/auth.js';
 import { cfg } from '../lib/env.js';
 import { aiEnabled } from '../lib/gemini.js';
 import { TONES } from '../lib/ai.js';
@@ -51,8 +51,9 @@ export function registerAuth(r) {
     return meState(await q.get('SELECT * FROM users WHERE id=?', id), date);
   }, { auth: false });
 
-  r.post('/api/auth/login', async ({ body, setCookie, date }) => {
+  r.post('/api/auth/login', async ({ request, body, setCookie, date }) => {
     const email = String(body.email || '').trim().toLowerCase();
+    rateLimit(`${request.headers.get('cf-connecting-ip') || 'local'}:${email}`, 'login', 10);   // slows password guessing per isolate
     const u = await q.get('SELECT * FROM users WHERE email=?', email);
     if (!u || !(await verifyPassword(String(body.password || ''), u.pass_hash))) throw new HttpError(401, "Email yoki parol noto'g'ri");
     setCookie(sessionCookie(await createSession(u.id)));
@@ -67,6 +68,17 @@ export function registerAuth(r) {
   }, { auth: false });
 
   r.get('/api/me', async ({ user, date }) => (user ? meState(await q.get('SELECT * FROM users WHERE id=?', user.id), date) : { user: null }), { auth: false });
+
+  r.post('/api/me/password', async ({ user, body, setCookie }) => {
+    const u = await q.get('SELECT pass_hash FROM users WHERE id=?', user.id);
+    if (!(await verifyPassword(String(body.current || ''), u.pass_hash))) throw new HttpError(403, "Joriy parol noto'g'ri");
+    const next = String(body.next || '');
+    if (next.length < 8) throw bad("Yangi parol kamida 8 ta belgi bo'lsin");
+    await q.run('UPDATE users SET pass_hash=? WHERE id=?', await hashPassword(next), user.id);
+    await q.run('DELETE FROM sessions WHERE user_id=?', user.id);            // sign out everywhere, then keep this device signed in
+    setCookie(sessionCookie(await createSession(user.id)));
+    return { ok: true };
+  });
 
   r.post('/api/me/teacher', async ({ user, body }) => {
     if (user.role !== 'student') throw new HttpError(403, "Faqat o'quvchilar uchun");
