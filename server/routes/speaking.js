@@ -1,7 +1,7 @@
 // Virtual speaking trainer: AI conversation partners with 10 personalities.
 import { q, j, unj } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
-import { aiEnabled, generateJSON, generateText, registerTts } from '../lib/gemini.js';
+import { aiEnabled, generateJSON, generateText, registerTts, aiErrorText } from '../lib/gemini.js';
 import { personaById, speakingModes, levelStyle } from '../content/personas.js';
 import { LEVELS, toCefr, describe, cefrToAbility, ieltsToAbility, clamp } from '../lib/scale.js';
 import { abilities, applyEvidence, effectiveTone } from '../lib/progress.js';
@@ -98,10 +98,10 @@ export function registerSpeaking(r) {
     const meta = { topic, unit, studied: studied.slice(-6) };
     const id = (await q.run('INSERT INTO speaking_sessions(user_id,persona,level,mode,topic) VALUES(?,?,?,?,?)', user.id, persona, level, mode, j(meta))).lastInsertRowid;
     const s = { id, persona, level, mode, topic, unit, studied: meta.studied };
-    let text;
+    let text, aiError = null;
     if (aiEnabled()) {
       rateLimit(user.id, 'ai', 40);
-      try { text = await generateText(`Begin the session now. Greet the learner in character (one short sentence) and then ${mode === 'ielts2' ? 'present the cue card' : 'ask your first question'}. Reply with your spoken line only.`, { system: system(s, unitById[unit], studiedNames(s)), temperature: 0.9 }); } catch { /* fallback */ }
+      try { text = await generateText(`Begin the session now. Greet the learner in character (one short sentence) and then ${mode === 'ielts2' ? 'present the cue card' : 'ask your first question'}. Reply with your spoken line only.`, { system: system(s, unitById[unit], studiedNames(s)), temperature: 0.9 }); } catch (e) { aiError = aiErrorText(e); }
     }
     if (!text) {
       const list = fallbackQs[mode] || fallbackQs.free;
@@ -109,7 +109,7 @@ export function registerSpeaking(r) {
     }
     await saveTurns(id, [{ role: 'ai', text }]);
     const row = await q.get('SELECT * FROM speaking_sessions WHERE id=?', id);
-    return { ...sessionView(row, [{ role: 'ai', text }]), ai: aiEnabled() };
+    return { ...sessionView(row, [{ role: 'ai', text }]), ai: aiEnabled() && !aiError, aiError };
   }, { role: 'student' });
 
   r.post('/api/speaking/:id/turn', async ({ user, params, body }) => {
@@ -124,7 +124,7 @@ export function registerSpeaking(r) {
     if (aiEnabled()) {
       rateLimit(user.id, 'ai', 40);
       try { out = await reply(s, turns, { audio: wav, text }); }
-      catch (e) { throw new HttpError(502, 'AI hozir javob bera olmadi. Qayta urinib ko\'ring.'); }
+      catch (e) { throw new HttpError(502, `AI hozir javob bera olmadi: ${aiErrorText(e)}`); }
     } else {
       const list = fallbackQs[s.mode] || fallbackQs.free;
       const idx = turns.filter((t) => t.role === 'ai').length;

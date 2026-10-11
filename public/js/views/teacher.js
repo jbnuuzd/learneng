@@ -12,7 +12,22 @@ const sel = (opts, val) => h('select', {}, opts.map(([v, t]) => h('option', { va
 export async function teacherHomeView() {
   const d = await api.get('/api/teacher/students');
   const copy = () => navigator.clipboard?.writeText(d.inviteCode).then(() => toast('Kod nusxalandi'));
+  const aiBox = h('div', {});
+  const aiBtn = h('button', { class: 'btn secondary sm', onclick: async () => {
+    aiBtn.disabled = true; mount(aiBox, loading('Gemini tekshirilmoqda (10–30 soniya)…'));
+    try {
+      const r = await api.post('/api/ai/test');
+      const row = (name, t) => t && h('tr', {}, h('td', {}, name), h('td', {}, t.ok ? '✅' : '❌'), h('td', { class: 'muted' }, t.ok ? `${t.ms} ms${t.detail ? ' · ' + t.detail : ''}` : t.error));
+      mount(aiBox, h('div', { class: 'card flat' }, r.tests ? [
+        h('div', { class: 'alert ' + (r.allOk ? 'ok' : 'bad') }, r.allOk ? "✅ Gemini to'liq ishlayapti (matn, audio qabul qilish, ovoz sintezi)." : '❌ Gemini bilan muammo bor.'),
+        r.trace && h('p', { class: 'muted' }, `Worker joylashuvi: ${r.trace.colo} (${r.trace.loc}) · modellar: ${r.textModel}, ${r.ttsModel}`),
+        h('table', { class: 't' }, h('tbody', {}, row('Matn', r.tests.text), row('Audio kirish (speaking)', r.tests.audio), row('Ovoz sintezi (TTS)', r.tests.tts))),
+        r.hint && h('div', { class: 'alert warn' }, '💡 ' + r.hint)] : h('div', { class: 'alert bad' }, r.hint || 'AI ulanmagan')));
+    } catch (e) { mount(aiBox, h('div', { class: 'alert bad' }, e.message)); }
+    aiBtn.disabled = false;
+  } }, '🤖 AI ulanishini tekshirish');
   return h('div', {},
+    h('div', { class: 'card flat row between' }, h('div', {}, h('b', {}, 'Sun\'iy intellekt'), h('div', { class: 'muted' }, "Speaking, baholash va audio ishlamasa, avval shuni bosing: aniq sabab ko'rsatiladi.")), aiBtn), aiBox,
     h('div', { class: 'row between' }, h('h1', {}, "O'quvchilar"), h('div', { class: 'row' }, h('a', { class: 'btn secondary sm', href: '/api/teacher/export.csv' }, '⬇ CSV'), h('div', { class: 'card flat', style: { margin: 0, padding: '8px 14px' } }, h('small', { class: 'muted' }, 'Ulanish kodi: '), h('b', { style: { letterSpacing: '.08em' } }, d.inviteCode), ' ', h('button', { class: 'btn ghost sm', onclick: copy }, 'Nusxalash')))),
     d.students.length ? h('div', { class: 'grid g2' }, d.students.map((s) => h('a', { class: 'card', href: '#/t/student/' + s.id, style: { color: 'inherit', textDecoration: 'none' } },
       h('div', { class: 'row between' }, h('div', {}, h('b', { style: { fontSize: '1.1rem' } }, s.name), h('div', { class: 'muted' }, s.email)), s.level ? h('div', { class: 'big-level', style: { fontSize: '1.6rem' } }, s.level.cefr) : h('span', { class: 'badge warn' }, 'Diagnostika yo\'q')),

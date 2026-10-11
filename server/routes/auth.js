@@ -2,7 +2,7 @@ import { q } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
 import { hashPassword, verifyPassword, createSession, sessionCookie, newInviteCode, rateLimit } from '../lib/auth.js';
 import { cfg } from '../lib/env.js';
-import { aiEnabled } from '../lib/gemini.js';
+import { aiEnabled, aiState, runAiChecks } from '../lib/gemini.js';
 import { TONES } from '../lib/ai.js';
 import { effectiveTone, currentLevel } from '../lib/progress.js';
 import { activePlan } from '../planner.js';
@@ -88,5 +88,11 @@ export function registerAuth(r) {
     return { ok: true };
   });
 
-  r.get('/api/ai/status', async () => ({ enabled: aiEnabled(), textModel: cfg.textModel, ttsModel: cfg.ttsModel }));
+  r.get('/api/ai/status', async () => ({ enabled: aiEnabled(), textModel: cfg.textModel, ttsModel: cfg.ttsModel, lastError: aiState.lastError, lastOkAt: aiState.lastOkAt }));
+  r.post('/api/ai/test', async ({ user }) => {
+    if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
+    rateLimit(user.id, 'aitest', 6);
+    if (!aiEnabled()) return { key: false, hint: "GEMINI_API_KEY Secret sifatida qo'shilmagan." };
+    return runAiChecks();
+  });
 }

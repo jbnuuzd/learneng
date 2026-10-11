@@ -1,6 +1,6 @@
 import { q, j, unj } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
-import { aiEnabled } from '../lib/gemini.js';
+import { aiEnabled, aiState } from '../lib/gemini.js';
 import { generateReading, generateListening, objectiveFeedback } from '../lib/ai.js';
 import { pickReading, pickListening, topicCatalog } from '../lib/content.js';
 import { topicNames } from '../content/pools.js';
@@ -56,7 +56,7 @@ export function registerTrainers(r) {
     }
     if (!content) {
       content = { ...pickReading(level, Date.now() + user.id), generated: false };
-      notice = aiEnabled() ? "AI vaqtincha ishlamadi — tayyor matn berildi." : "AI ulanmagan — tayyor matnlar to'plamidan berildi. API kalitini qo'shsangiz, har safar yangi matn yaratiladi.";
+      notice = aiEnabled() ? `AI vaqtincha ishlamadi (${aiState.lastError?.message || 'sabab noma\'lum'}) — tayyor matn berildi.` : "AI ulanmagan — tayyor matnlar to'plamidan berildi. API kalitini qo'shsangiz, har safar yangi matn yaratiladi.";
     }
     const id = (await q.run('INSERT INTO trainer_runs(user_id,kind,level,topic,content_json) VALUES(?,?,?,?,?)', user.id, 'reading', level, topic, j(content))).lastInsertRowid;
     return { ...publicRun({ id, kind: 'reading', level, topic, created_at: '' }, content), notice };
@@ -79,7 +79,7 @@ export function registerTrainers(r) {
     }
     if (!content) {
       content = { ...pickListening(level, Date.now() + user.id), generated: false };
-      notice = aiEnabled() ? "AI vaqtincha ishlamadi — tayyor audio berildi." : "AI ulanmagan — tayyor to'plamdan berildi (ovoz brauzer orqali o'qiladi).";
+      notice = aiEnabled() ? `AI vaqtincha ishlamadi (${aiState.lastError?.message || 'sabab noma\'lum'}) — tayyor audio berildi.` : "AI ulanmagan — tayyor to'plamdan berildi (ovoz brauzer orqali o'qiladi).";
     }
     const id = (await q.run('INSERT INTO trainer_runs(user_id,kind,level,topic,content_json) VALUES(?,?,?,?,?)', user.id, 'listening', level, topic, j(content))).lastInsertRowid;
     return { ...publicRun({ id, kind: 'listening', level, topic, created_at: '' }, content), notice };

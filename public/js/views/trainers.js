@@ -88,7 +88,7 @@ export async function speakingTrainerView({ args }) {
     h('div', { class: 'card' }, h('h2', {}, '2. Sozlamalar'), h('div', { class: 'grid g2' }, field('Qiyinlik darajasi', level, "«Avto» — o'zlashtirgan darajangizda suhbat"), field('Rejim', mode)), unitField, field('Mavzu', topic),
       h('button', { class: 'btn lg', onclick: async (e) => {
         e.target.disabled = true; e.target.replaceChildren(h('span', { class: 'spinner' }), ' Ustoz tayyorlanmoqda…');
-        try { const s = await api.post('/api/speaking/start', { persona, level: level.value, mode: mode.value, topic: topic.value, unit: unitSel.value }); go('#/trainer/speaking/' + s.id); }
+        try { const s = await api.post('/api/speaking/start', { persona, level: level.value, mode: mode.value, topic: topic.value, unit: unitSel.value }); if (s.aiError) toast('AI ishlamadi, tayyor savol berildi. Sabab: ' + s.aiError, true); go('#/trainer/speaking/' + s.id); }
         catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = '▶ Suhbatni boshlash'; }
       } }, '▶ Suhbatni boshlash')), hist);
 }

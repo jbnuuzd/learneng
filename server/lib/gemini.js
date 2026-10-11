@@ -6,31 +6,39 @@ export class AiError extends Error {
 }
 export const aiEnabled = () => !!cfg.apiKey;
 
+// Last Gemini outcome in this Worker instance, shown in the teacher's "AI connection" check.
+export const aiState = { lastError: null, lastOkAt: null };
+// Short, key-free description of a failure for UI messages and logs.
+export function aiErrorText(e) {
+  const m = String(e?.message || e || 'noma\'lum xato').replace(/AIza[0-9A-Za-z_-]{20,}/g, '[kalit]').replace(/\s+/g, ' ');
+  return m.length > 220 ? m.slice(0, 220) + '…' : m;
+}
+const note = (e) => { aiState.lastError = { at: new Date().toISOString(), message: aiErrorText(e) }; console.error('[gemini]', aiState.lastError.message); return e; };
+
 async function call(model, body, timeoutMs) {
   if (!cfg.apiKey) throw new AiError('no_key', 'GEMINI_API_KEY sozlanmagan');
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
+    let r;
     try {
-      const r = await fetch(`${cfg.baseUrl}/models/${model}:generateContent`, {
+      r = await fetch(`${cfg.baseUrl}/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': cfg.apiKey },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (r.status === 429 || r.status >= 500) {
-        lastErr = new AiError('failed', `Gemini ${r.status}`);
-        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
-        continue;
-      }
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new AiError('failed', data?.error?.message || `Gemini ${r.status}`);
-      return data;
-    } catch (e) {
-      if (e instanceof AiError && e.message.startsWith('Gemini') === false) throw e;
-      lastErr = e instanceof AiError ? e : new AiError('failed', e.message);
+    } catch (e) {                                                  // network error / timeout
+      lastErr = new AiError('failed', `Gemini'ga ulanib bo'lmadi (${e.name === 'TimeoutError' ? 'vaqt tugadi' : e.message})`);
+      continue;
     }
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) { aiState.lastError = null; aiState.lastOkAt = new Date().toISOString(); return data; }
+    const detail = `${model} → ${r.status}${data?.error?.status ? ' ' + data.error.status : ''}: ${data?.error?.message || 'xato'}`;
+    lastErr = new AiError(r.status === 429 || r.status >= 500 ? 'retry' : 'failed', detail);
+    if (r.status !== 429 && r.status < 500) throw note(lastErr);   // 400/401/403/404 will not get better by retrying
+    await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
   }
-  throw lastErr;
+  throw note(lastErr);
 }
 
 function textOf(data) {
@@ -156,4 +164,25 @@ export async function ttsAudio(id) {
   } catch {
     return { fallback: true, text: plainText(entry.text), voice: entry.voice };
   }
+}
+
+// Diagnostics: a tiny real request for each AI feature, so the teacher can see exactly what fails and where the Worker runs.
+export async function runAiChecks() {
+  const time = async (fn) => { const t0 = Date.now(); try { const detail = await fn(); return { ok: true, ms: Date.now() - t0, detail }; } catch (e) { return { ok: false, ms: Date.now() - t0, error: aiErrorText(e) }; } };
+  let trace = null;
+  try { const t = await (await fetch('https://www.cloudflare.com/cdn-cgi/trace', { signal: AbortSignal.timeout(5000) })).text(); trace = Object.fromEntries(t.trim().split('\n').map((l) => l.split('=')).filter((p) => ['colo', 'loc'].includes(p[0]))); } catch { /* optional */ }
+  const silent = pcmToWav(new Uint8Array(9600), 16000);
+  const b64 = btoa(String.fromCharCode(...silent));
+  const tests = {
+    text: await time(async () => (await generateText('Reply with the single word OK.', { temperature: 0 })).slice(0, 40)),
+    audio: await time(async () => { await generateJSON('The audio is silent. Return JSON {"ok":true}.', { audio: { mime: 'audio/wav', data: b64 } }); return 'audio input accepted'; }),
+    tts: await time(async () => `${(await synthesize('Hello.', { voice: 'Kore' })).length} bytes`),
+  };
+  const errs = Object.values(tests).filter((t) => !t.ok).map((t) => t.error).join(' | ');
+  let hint = null;
+  if (/location is not supported|FAILED_PRECONDITION/i.test(errs)) hint = "Worker Gemini qo'llab-quvvatlamaydigan hududdan so'rov yuboryapti. wrangler.jsonc ga placement (masalan AQSh) qo'shish kerak.";
+  else if (/API key|API_KEY_INVALID|PERMISSION_DENIED|401|403/i.test(errs)) hint = "API kalit noto'g'ri yoki ruxsati yo'q. AI Studio'da yangi kalit yarating va Secret'ni yangilang.";
+  else if (/429|RESOURCE_EXHAUSTED|quota/i.test(errs)) hint = "Bepul kvota (daqiqa/kun limiti) tugagan. Biroz kuting yoki AI Studio'da hisob-kitobni yoqing.";
+  else if (/404|not found|NOT_FOUND/i.test(errs)) hint = "Model nomi topilmadi. wrangler.jsonc dagi GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL ni yangilang.";
+  return { key: aiEnabled(), textModel: cfg.textModel, ttsModel: cfg.ttsModel, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
 }
