@@ -80,6 +80,8 @@ BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq,
 
 **Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
 
+**🔑 Shaxsiy kalit (o'quvchi):** Profil → «Shaxsiy Gemini API kalitim»: o'quvchi o'z bepul kalitini (3 tagacha) qo'shsa, uning AI so'rovlari (Lingo, speaking, baholash, talaffuz, ovoz) faqat shu kalit limitida ishlaydi — umumiy kalit sarflanmaydi. Kalit qo'shishda tekshiriladi; limit tugasa AI to'xtaydi (umumiy kalitga o'tmaydi), kalitni o'chirsa umumiy kalitga qaytadi.
+
 **📅 «Bu haftam» (o'quvchi):** bosh sahifada oxirgi 7 kun — o'qilgan vaqt, faol kunlar, yangi so'zlar, topshiriqlar, kunlik ustunlar va o'tgan haftaga nisbatan o'zgarish, Lingo'dan qisqa izoh (AI so'rovisiz).
 
 **📣 Sinfga yuborish (o'qituvchi):** «O'quvchilar» sahifasida — tanlangan yoki barcha o'quvchilarga bir xil topshiriq va/yoki xabarni bir bosishda yuborish (bir vaqtda 25 tagacha).

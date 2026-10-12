@@ -1,4 +1,4 @@
-import { cfg, getEnv } from './env.js';
+import { cfg, getEnv, getContext } from './env.js';
 import { q } from './db.js';
 
 export class AiError extends Error {
@@ -11,7 +11,11 @@ export async function loadDbKeys(force = false) {
   dbKeysAt = Date.now();
   try { dbKeys = (await q.all('SELECT api_key FROM ai_keys ORDER BY id')).map((r) => r.api_key); } catch { /* table not migrated yet */ }
 }
-export const allKeys = () => [...new Set([...cfg.apiKeys, ...dbKeys])];
+const sharedKeys = () => [...new Set([...cfg.apiKeys, ...dbKeys])];
+export const sharedAiEnabled = () => sharedKeys().length > 0;
+export const usingOwnKeys = () => (getContext().ownKeys?.length || 0) > 0;
+// A student who supplied their own key(s) uses only those (their own limit); everybody else uses the shared pool.
+export const allKeys = () => (usingOwnKeys() ? getContext().ownKeys : sharedKeys());
 export const aiEnabled = () => allKeys().length > 0;
 
 // Key rotation: a key that hits its quota (429) or is rejected is parked for a while and the next key is used.
@@ -23,7 +27,7 @@ function pickKey(skip = new Set()) {
   return keys.find((k) => (cooldown.get(k) || 0) <= now) || keys.sort((a, b) => (cooldown.get(a) || 0) - (cooldown.get(b) || 0))[0] || null;
 }
 export const keyTagOf = keyTag;
-export const keyStatus = () => allKeys().map((k) => ({ key: keyTag(k), source: cfg.apiKeys.includes(k) ? 'secret' : 'ui', cooling: (cooldown.get(k) || 0) > Date.now() ? Math.ceil(((cooldown.get(k) || 0) - Date.now()) / 1000) : 0 }));
+export const keyStatus = () => allKeys().map((k) => ({ key: keyTag(k), source: usingOwnKeys() ? 'own' : cfg.apiKeys.includes(k) ? 'secret' : 'ui', cooling: (cooldown.get(k) || 0) > Date.now() ? Math.ceil(((cooldown.get(k) || 0) - Date.now()) / 1000) : 0 }));
 
 // Last Gemini outcome in this Worker instance, shown in the teacher's "AI connection" check.
 export const aiState = { lastError: null, lastOkAt: null, models: {} };   // models: auto-selected replacements when a configured model is retired
@@ -48,6 +52,8 @@ export function pickModel(kind, names) {
 }
 const configured = (kind) => (kind === 'tts' ? cfg.ttsModel : cfg.textModel);
 const effective = (kind) => aiState.models[kind] || configured(kind);
+
+const ownPrefix = (e) => (usingOwnKeys() && e && !/^Shaxsiy/.test(e.message) ? new AiError(e.code, `Shaxsiy API kalitingiz: ${e.message}`) : e);
 
 async function call(kind, body, timeoutMs, { fast = false } = {}) {
   if (!aiEnabled()) throw new AiError('no_key', 'GEMINI_API_KEY sozlanmagan');
@@ -92,10 +98,11 @@ async function call(kind, body, timeoutMs, { fast = false } = {}) {
       } catch (e) { lastErr = new AiError('failed', `${detail} (model ro'yxatini olib bo'lmadi: ${aiErrorText(e)})`); }
     }
     const transient = r.status === 429 || r.status >= 500 || /Model tried to generate text/i.test(msg);   // the TTS model sometimes answers with text; a retry usually fixes it
-    if (!transient) throw note(lastErr);
+    if (!transient) throw note(ownPrefix(lastErr));
     await new Promise((res) => setTimeout(res, 1200 * (attempt + 1)));
   }
-  throw note(lastErr);
+  if (usingOwnKeys() && lastErr) lastErr = new AiError(lastErr.code, `Shaxsiy API kalitingiz: ${lastErr.message}`);
+  throw note(ownPrefix(lastErr));
 }
 
 function textOf(data) {
@@ -276,4 +283,15 @@ export async function runAiChecks() {
   else if (/429|RESOURCE_EXHAUSTED|quota/i.test(errs)) hint = "Bepul kvota (daqiqa/kun limiti) tugagan. Biroz kuting yoki AI Studio'da hisob-kitobni yoqing.";
   else if (/404|not found|NOT_FOUND/i.test(errs)) hint = "Model nomi topilmadi. wrangler.jsonc dagi GEMINI_TEXT_MODEL / GEMINI_TTS_MODEL ni yangilang.";
   return { key: aiEnabled(), keys: keyStatus(), textModel: effective('text'), ttsModel: effective('tts'), configured: { text: cfg.textModel, tts: cfg.ttsModel }, autoSwitched: { ...aiState.models }, trace, tests, allOk: Object.values(tests).every((t) => t.ok), hint };
+}
+
+// Verify a key with a free metadata call (no generation quota used). Returns an Uzbek error text, or null when the key works.
+export async function checkKey(key) {
+  try {
+    const r = await fetch(`${cfg.baseUrl}/models?pageSize=1`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) });
+    if (r.ok) return null;
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 400 || r.status === 401 || r.status === 403) return `Kalit qabul qilinmadi (${d?.error?.message ? d.error.message.slice(0, 120) : r.status}). AI Studio'dan to'g'ri kalitni nusxalang.`;
+    return null;   // 429/5xx: cannot tell, accept the key
+  } catch { return "Kalitni tekshirib bo'lmadi (tarmoq xatosi). Birozdan keyin urinib ko'ring."; }
 }

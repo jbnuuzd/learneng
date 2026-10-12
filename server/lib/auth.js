@@ -35,10 +35,11 @@ export async function createSession(userId) {
 }
 export async function userFromToken(token) {
   if (!token) return null;
-  const row = await q.get('SELECT u.id,u.email,u.name,u.role,u.teacher_id,u.invite_code,u.feedback_tone,u.created_at, s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?', token);
+  const row = await q.get('SELECT u.id,u.email,u.name,u.role,u.teacher_id,u.invite_code,u.feedback_tone,u.created_at, s.expires_at, (SELECT group_concat(api_key, char(32)) FROM student_keys WHERE user_id=u.id) AS own_keys FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?', token);
   if (!row) return null;
   if (row.expires_at < Date.now()) { await q.run('DELETE FROM sessions WHERE token=?', token); return null; }
-  const { expires_at, ...user } = row;
+  const { expires_at, own_keys, ...user } = row;
+  Object.defineProperty(user, 'ownKeys', { value: own_keys ? own_keys.split(' ') : [], enumerable: false });   // never serialised
   return user;
 }
 export const sessionCookie = (token, maxAge = 30 * 86400, secure = true) =>

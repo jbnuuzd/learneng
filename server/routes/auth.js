@@ -2,11 +2,12 @@ import { q } from '../lib/db.js';
 import { bad, HttpError } from '../lib/http.js';
 import { hashPassword, verifyPassword, createSession, sessionCookie, newInviteCode, rateLimit } from '../lib/auth.js';
 import { cfg } from '../lib/env.js';
-import { aiEnabled, aiState, runAiChecks, loadDbKeys, keyStatus, allKeys } from '../lib/gemini.js';
+import { aiEnabled, aiState, runAiChecks, loadDbKeys, keyStatus, allKeys, checkKey, sharedAiEnabled } from '../lib/gemini.js';
 import { TONES } from '../lib/ai.js';
 import { effectiveTone, currentLevel } from '../lib/progress.js';
 import { activePlan } from '../planner.js';
 
+const MAX_OWN_KEYS = 3;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function meState(user, date) {
@@ -123,6 +124,27 @@ export function registerAuth(r) {
     await q.run('DELETE FROM ai_keys WHERE id=?', Number(params.id)); await loadDbKeys(true);
     return keyList();
   });
+  // A student's own Gemini key(s): their AI requests then run on their own quota. Keys are checked once when added; only the last 4 characters are returned.
+  const myKeys = async (userId) => (await q.all('SELECT id, api_key, label, created_at FROM student_keys WHERE user_id=? ORDER BY id', userId))
+    .map((x) => ({ id: x.id, key: '…' + x.api_key.slice(-4), label: x.label, created: x.created_at, ...(keyStatus().find((k) => k.key === '…' + x.api_key.slice(-4)) ? { cooling: keyStatus().find((k) => k.key === '…' + x.api_key.slice(-4)).cooling } : { cooling: 0 }) }));
+  const STUDENT = { role: 'student' };
+  r.get('/api/me/keys', async ({ user }) => ({ keys: await myKeys(user.id), max: MAX_OWN_KEYS, shared: sharedAiEnabled() }), STUDENT);
+  r.post('/api/me/keys', async ({ user, body }) => {
+    rateLimit(user.id, 'ownkey', 10);
+    const k = String(body.key || '').trim().replace(/^[A-Za-z_]+=/, '').replace(/^["'`]+|["'`]+$/g, '');
+    if (!/^[\x21-\x7e]{20,200}$/.test(k) || /["'<>\\]/.test(k)) throw bad("Kalit shakli noto'g'ri (bo'sh joy yoki ortiqcha belgi bo'lmasin; kamida 20 belgi)");
+    const have = await q.all('SELECT api_key FROM student_keys WHERE user_id=?', user.id);
+    if (have.some((x) => x.api_key === k)) throw bad('Bu kalit allaqachon qo\'shilgan');
+    if (have.length >= MAX_OWN_KEYS) throw bad(`Eng ko'pi bilan ${MAX_OWN_KEYS} ta kalit qo'shish mumkin`);
+    const bad_ = await checkKey(k);
+    if (bad_) throw bad(bad_);
+    await q.run('INSERT INTO student_keys(user_id,api_key,label) VALUES(?,?,?)', user.id, k, String(body.label || '').trim().slice(0, 40));
+    return { keys: await myKeys(user.id), max: MAX_OWN_KEYS };
+  }, STUDENT);
+  r.delete('/api/me/keys/:id', async ({ user, params }) => {
+    await q.run('DELETE FROM student_keys WHERE id=? AND user_id=?', Number(params.id), user.id);
+    return { keys: await myKeys(user.id), max: MAX_OWN_KEYS };
+  }, STUDENT);
   r.post('/api/ai/test', async ({ user }) => {
     if (user.role !== 'teacher') throw new HttpError(403, "Faqat o'qituvchilar uchun");
     rateLimit(user.id, 'aitest', 6);

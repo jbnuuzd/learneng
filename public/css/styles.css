@@ -238,3 +238,4 @@ table.t tbody tr { transition: background .12s; } table.t tbody tr:hover { backg
 .wb { text-align: center; } .wb .col { height: 84px; display: flex; align-items: flex-end; background: var(--brand-soft); border-radius: 10px; overflow: hidden; }
 .wb .col i { display: block; width: 100%; background: linear-gradient(180deg, var(--brand-2), var(--brand)); border-radius: 10px 10px 0 0; min-height: 0; transition: height .6s cubic-bezier(.2,.8,.2,1); }
 .wb.today small { color: var(--brand); font-weight: 700; }
+.row > input[type=text], .row > input[type=password] { flex: 1 1 220px; width: auto; min-width: 0; }

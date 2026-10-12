@@ -1,5 +1,5 @@
 // Cloudflare Worker entry: /api/* is handled here, everything else is served from Workers Assets (/public).
-import { setEnv } from './lib/env.js';
+import { setEnv, runWithContext } from './lib/env.js';
 import { createRouter, HttpError, readJson, parseCookies } from './lib/http.js';
 import { userFromToken } from './lib/auth.js';
 import { clientDate } from './lib/dates.js';
@@ -59,8 +59,11 @@ async function handle(request, env, execCtx) {
     waitUntil: (p) => { try { execCtx?.waitUntil?.(p); } catch { /* tests */ } },
     setCookie: (v) => resHeaders.append('set-cookie', url.protocol === 'https:' ? v : v.replace('; Secure', '')),
   };
-  const out = await route.handler(ctx);
-  await flushTts();
+  const out = await runWithContext({ ownKeys: user?.ownKeys || [] }, async () => {
+    const res = await route.handler(ctx);
+    await flushTts();
+    return res;
+  });
   return toResponse(out, resHeaders);
 }
 

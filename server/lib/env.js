@@ -1,6 +1,12 @@
 // Cloudflare Workers environment: bindings (DB, FILES, ASSETS) and vars/secrets arrive per request.
 // The worker entry calls setEnv(env) first; everything else reads through cfg / getEnv().
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 let current = {};
+// Per-request context (e.g. the signed-in student's own API keys). AsyncLocalStorage keeps concurrent requests apart.
+export const requestContext = new AsyncLocalStorage();
+export const runWithContext = (ctx, fn) => requestContext.run(ctx, fn);
+export const getContext = () => requestContext.getStore() || {};
 export const setEnv = (env) => { current = env || {}; };
 export const getEnv = () => current;
 
