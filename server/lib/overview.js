@@ -21,7 +21,7 @@ export async function studentsOverview(teacherId, date) {
   if (!students.length) return [];
   const IDS = "(SELECT id FROM users WHERE role='student' AND teacher_id=?)";
   const from7 = addDays(date, -7), from90 = addDays(date, -90);
-  const [ab, goals, overrides, today, words, doneAgg, doneDates, past, week, lastAtt, low] = await Promise.all([
+  const [ab, goals, overrides, today, words, doneAgg, doneDates, past, week, lastAtt, low, ownKeys] = await Promise.all([
     q.all(`SELECT user_id, skill, ability FROM skill_progress WHERE user_id IN ${IDS}`, teacherId),
     q.all(`SELECT user_id, target_cefr, target_ielts, deadline FROM goals WHERE user_id IN ${IDS}`, teacherId),
     q.all(`SELECT student_id, tone FROM tone_overrides WHERE date=? AND student_id IN ${IDS}`, date, teacherId),
@@ -33,7 +33,9 @@ export async function studentsOverview(teacherId, date) {
     q.all(`SELECT user_id, COUNT(*) planned, SUM(CASE WHEN status!='done' THEN 1 ELSE 0 END) missed FROM tasks WHERE date<? AND date>=? AND user_id IN ${IDS} GROUP BY user_id`, date, from7, teacherId),
     q.all(`SELECT user_id, MAX(created_at) t FROM attempts WHERE user_id IN ${IDS} GROUP BY user_id`, teacherId),
     q.all(`SELECT user_id, topic, AVG(score) a, COUNT(*) n FROM attempts WHERE skill='grammar' AND score IS NOT NULL AND topic IS NOT NULL AND created_at>=datetime('now','-14 day') AND user_id IN ${IDS} GROUP BY user_id, topic HAVING n>=2 AND a<0.6`, teacherId),
+    q.all(`SELECT DISTINCT user_id FROM student_keys WHERE user_id IN ${IDS}`, teacherId),
   ]);
+  const ownSet = new Set(ownKeys.map((r) => r.user_id));
   const by = (rows, key = 'user_id') => { const m = new Map(); for (const r of rows) { if (!m.has(r[key])) m.set(r[key], []); m.get(r[key]).push(r); } return m; };
   const abBy = by(ab), goalBy = new Map(goals.map((g) => [g.user_id, g])), ovBy = new Map(overrides.map((o) => [o.student_id, o.tone]));
   const todayBy = new Map(today.map((t) => [t.user_id, t])), wordsBy = new Map(words.map((w) => [w.user_id, w.n])), doneBy = new Map(doneAgg.map((d) => [d.user_id, d]));
@@ -55,7 +57,7 @@ export async function studentsOverview(teacherId, date) {
       today: { percent: total ? Math.round((done / total) * 100) : 0, minutes: total },
       alerts: buildAlerts({ today: date, planned7: wk?.planned || 0, missed7: wk?.missed || 0, last: lastBy.get(s.id) || null, low: lowBy.get(s.id) || [] }),
       stats: { wordsLearned: wordsBy.get(s.id) || 0, tasksDone: dn?.n || 0, minutesDone: dn?.m || 0, streak, missed, completionRate: planned ? Math.round(((planned - missed) / planned) * 100) : null },
-      lastActive: lastBy.get(s.id) || null,
+      lastActive: lastBy.get(s.id) || null, ownKey: ownSet.has(s.id),
     };
   });
 }

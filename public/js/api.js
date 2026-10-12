@@ -1,3 +1,5 @@
+import { state } from './state.js';
+
 export const localDate = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -15,7 +17,11 @@ async function request(method, url, body, opts = {}) {
   const data = ct.includes('json') ? await res.json().catch(() => ({})) : null;
   if (!res.ok) {
     if (res.status === 401 && !url.startsWith('/api/auth/') && url !== '/api/me') { window.dispatchEvent(new Event('auth-lost')); }
-    throw new ApiError(res.status, data?.error || `Xato (${res.status})`, data);
+    let msg = data?.error || `Xato (${res.status})`;
+    // AI quota exhausted: tell a student how to keep learning on their own key
+    if (res.status === 502 && /429|RESOURCE_EXHAUSTED|quota|kvota|limit/i.test(msg) && !/Shaxsiy/.test(msg) && state.me?.user?.role === 'student')
+      msg += " — Umumiy AI limiti tugagan. O'z bepul kalitingizni qo'shing: Profil → «Shaxsiy Gemini API kalitim».";
+    throw new ApiError(res.status, msg, data);
   }
   return data;
 }

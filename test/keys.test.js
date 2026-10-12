@@ -64,6 +64,8 @@ test('student with an own key: AI runs on that key only; other students use the 
   await s2.post('/api/buddy/chat', { message: 'hello' });
   assert.ok(used.slice(n2).every((k) => !k.startsWith('STUDENT-OWN')), 'others never touch the student key');
   assert.equal((await teacher.get('/api/me/keys')).status, 403);
+  const list = (await teacher.get('/api/teacher/students')).data.students;
+  assert.equal(list.find((s) => s.name === 'Own Key').ownKey, true); assert.equal(list.find((s) => s.name === 'Shared One').ownKey, false);
   assert.equal((await s1.get('/api/me')).data.user.ownKeys, undefined);
   r = await s1.del('/api/me/keys/' + (await s1.get('/api/me/keys')).data.keys[0].id);
   assert.equal(r.data.keys.length, 0);
