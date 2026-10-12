@@ -344,3 +344,10 @@ test('bulk: one task / message to several students, only the teacher\'s own', as
   assert.ok(day.tasks.some((t) => t.title === 'Bulk vazifa'));
   assert.equal((await teacher.post('/api/teacher/tasks/bulk', { studentIds: [], kind: 'custom', title: 'x', instructions: 'y', mode: 'confirm' })).status, 400);
 });
+
+test('student week summary: 7 days, totals and a note', async () => {
+  const w = (await student.get('/api/me/week')).data;
+  assert.equal(w.days.length, 7); assert.equal(w.days.at(-1).date, date);
+  assert.equal(w.minutes, w.days.reduce((s, d) => s + d.minutes, 0)); assert.ok(typeof w.note === 'string' && w.note.length > 10);
+  assert.equal((await teacher.get('/api/me/week')).status, 403);
+});

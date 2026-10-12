@@ -83,8 +83,19 @@ function buddyCard(name, st) {
     h('div', {}, say, playBtn, log, h('div', { class: 'sugg' }, sugg), h('div', { class: 'composer' }, input, mic, speaker, h('button', { class: 'btn', type: 'button', onclick: () => send(input.value) }, 'Yuborish'))));
 }
 
+const DOW = ['Ya', 'Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha'];
+function weekCard(w) {
+  const max = Math.max(30, ...w.days.map((d) => d.minutes));
+  const diff = w.minutes - w.prevMinutes;
+  return h('div', { class: 'card' },
+    h('div', { class: 'row between' }, h('h2', {}, '📅 Bu haftam'), w.prevMinutes ? h('span', { class: 'badge ' + (diff >= 0 ? 'ok' : 'warn') }, `${diff >= 0 ? '▲ +' : '▼ '}${diff} daq. (o'tgan haftaga nisbatan)`) : null),
+    h('div', { class: 'grid g4' }, [[fmtMin(w.minutes), "o'qilgan vaqt"], [`${w.activeDays}/7`, 'faol kun'], [w.newWords, "yangi so'z"], [`${w.done}/${w.planned}`, 'topshiriq']].map(([b, s]) => h('div', { class: 'card flat stat' }, h('b', {}, b), h('span', {}, s)))),
+    h('div', { class: 'weekbars' }, w.days.map((d) => h('div', { class: 'wb' + (d.date === w.to ? ' today' : '') , title: `${d.date}: ${d.minutes} daq.` }, h('div', { class: 'col' }, h('i', { style: { height: Math.round((d.minutes / max) * 100) + '%' } })), h('small', {}, DOW[new Date(d.date + 'T12:00:00').getDay()])))),
+    h('p', { style: { margin: '10px 0 0' } }, '🦉 ' + w.note));
+}
+
 export async function homeView() {
-  const [plan, prog, mats] = await Promise.all([api.get('/api/plan'), api.get('/api/progress'), api.get('/api/materials').catch(() => [])]);
+  const [plan, prog, mats, week] = await Promise.all([api.get('/api/plan'), api.get('/api/progress'), api.get('/api/materials').catch(() => []), api.get('/api/me/week').catch(() => null)]);
   const msgs = (await api.get('/api/messages').catch(() => [])).filter((m) => !m.read);
   const me = state.me, today = plan.today;
   const day = plan.todayView;
@@ -97,6 +108,7 @@ export async function homeView() {
       h('div', { class: 'row' }, h('small', {}, 'Fikr-mulohaza:'), toneBadge(me.today.tone))),
       day && h('div', { class: 'progress' }, h('div', { class: 'row between' }, h('small', {}, "Bugungi reja"), h('small', {}, `${fmtMin(day.doneMinutes)} / ${fmtMin(day.totalMinutes)} · ${Math.round(day.percent)}%`)), bar(day.percent / 100))),
     buddyCard(me.user.name.split(' ')[0], st),
+    week ? weekCard(week) : null,
     msgs.length ? h('div', { class: 'card flat' }, h('b', {}, `💬 O'qituvchidan xabar${msgs.length > 1 ? 'lar' : ''}`), msgs.map((m) => h('div', { class: 'q' }, h('div', { class: 'fb' }, m.text), h('small', { class: 'muted' }, `${m.teacher} · ${m.created_at.slice(0, 16)}`))),
       h('button', { class: 'btn secondary sm', onclick: async (e) => { e.target.disabled = true; await api.post('/api/messages/read'); e.target.closest('.card').remove(); } }, "O'qidim")) : null,
     st.missed >= 3 && h('div', { class: 'alert warn' }, h('div', { class: 'row between' }, h('span', {}, `Siz ${st.missed} ta topshiriqni o'tkazib yubordingiz. Rejani bugundan qayta tuzamizmi?`),

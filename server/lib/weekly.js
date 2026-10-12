@@ -43,3 +43,26 @@ export async function weeklySummary(report) {
     return { ai: true, text };
   } catch (e) { return { ai: false, text: null, error: aiErrorText(e) }; }
 }
+
+// Student's own last-7-days summary (no AI cost): totals, trend vs the week before, per-day minutes and a short rule-based note.
+export async function myWeek(userId, date) {
+  const from = addDays(date, -6), prevFrom = addDays(date, -13);
+  const [perDay, prev, words, sp] = await Promise.all([
+    q.all("SELECT date, COALESCE(SUM(CASE WHEN status='done' THEN minutes END),0) m, COUNT(*) planned, SUM(CASE WHEN status='done' THEN 1 ELSE 0 END) done FROM tasks WHERE user_id=? AND date>=? AND date<=? GROUP BY date", userId, from, date),
+    q.get("SELECT COALESCE(SUM(CASE WHEN status='done' THEN minutes END),0) m FROM tasks WHERE user_id=? AND date>=? AND date<?", userId, prevFrom, from),
+    q.get('SELECT COUNT(*) n FROM learned_words WHERE user_id=? AND learned_on>=? AND learned_on<=?', userId, from, date),
+    q.get("SELECT COUNT(*) n FROM speaking_sessions WHERE user_id=? AND status='done' AND substr(created_at,1,10)>=?", userId, from),
+  ]);
+  const map = new Map(perDay.map((r) => [r.date, r]));
+  const days = Array.from({ length: 7 }, (_, i) => { const d = addDays(from, i); const r = map.get(d); return { date: d, minutes: r?.m || 0, planned: r?.planned || 0, done: r?.done || 0 }; });
+  const minutes = days.reduce((a, d) => a + d.minutes, 0), planned = days.reduce((a, d) => a + d.planned, 0), done = days.reduce((a, d) => a + d.done, 0);
+  const activeDays = days.filter((d) => d.minutes > 0).length, prevMinutes = prev?.m || 0;
+  let note;
+  if (!planned) note = "Bu hafta rejalashtirilgan topshiriq yo'q. Rejani tekshiring yoki Lingo bilan gaplashib mashq qiling!";
+  else if (!done) note = "Bu hafta hali bitta topshiriq ham bajarilmagan. Bugun kichik bir mashqdan boshlaymizmi? Men yoningizdaman.";
+  else if (minutes > prevMinutes * 1.2 && prevMinutes > 0) note = `Ofarin! O'tgan haftadan ${minutes - prevMinutes} daqiqa ko'p o'qidingiz. Shu tempda davom eting!`;
+  else if (prevMinutes > 0 && minutes < prevMinutes * 0.6) note = "O'tgan haftaga qaraganda kamroq o'qidingiz. Kuniga 20 daqiqa ham farq qiladi — bugun urinib ko'ring.";
+  else if (activeDays >= 6) note = "Deyarli har kuni o'qidingiz — bu eng muhim odat! 🔥";
+  else note = `${activeDays} kun faol bo'ldingiz. ${activeDays < 5 ? "Haftada kamida 5 kun o'qishga harakat qiling." : "Yaxshi davom etyapsiz!"}`;
+  return { from, to: date, days, minutes, prevMinutes, planned, done, activeDays, newWords: words?.n || 0, speaking: sp?.n || 0, note };
+}

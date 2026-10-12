@@ -5,6 +5,7 @@ import { abilities, overall, history, currentLevel, SKILLS, SKILL_UZ } from '../
 import { toCefr, toIelts, ieltsToAbility, cefrToAbility, describe, LEVELS, goalAbility } from '../lib/scale.js';
 import { previewGoal, generatePlan, activePlan, weakTopics, NEW_WORDS_PER_DAY, VOCAB_MINUTES } from '../planner.js';
 import { describeTask, hydrate, TYPE_UZ } from '../lessons.js';
+import { myWeek } from '../lib/weekly.js';
 import { badgesFor } from '../lib/badges.js';
 import { analyseGoal } from '../analysis.js';
 import { ensureSrsTask, srsStats } from '../lib/srs.js';
@@ -69,6 +70,7 @@ export async function progressFor(userId, today) {
 }
 
 export function registerPlan(r) {
+  r.get('/api/me/week', async ({ user, date }) => myWeek(user.id, date), { role: 'student' });
   // Messages from the student's teacher (unread first)
   r.get('/api/messages', async ({ user }) => q.all('SELECT m.id, m.text, m.read, m.created_at, u.name AS teacher FROM messages m JOIN users u ON u.id=m.teacher_id WHERE m.student_id=? ORDER BY m.read, m.id DESC LIMIT 10', user.id), { role: 'student' });
   r.post('/api/messages/read', async ({ user }) => { await q.run('UPDATE messages SET read=1 WHERE student_id=? AND read=0', user.id); return { ok: true }; }, { role: 'student' });
