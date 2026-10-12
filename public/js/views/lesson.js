@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, toast, loading, fmtDate, fmtMin, TYPE_ICON, bar, mount, add } from '../ui.js';
+import { confetti, h, toast, loading, fmtDate, fmtMin, TYPE_ICON, bar, mount, add } from '../ui.js';
 import { audioBtn, audioPlayer, choiceList, recorderWidget, wordCountEl, resultPanel } from '../components.js';
 import { go } from '../state.js';
 
@@ -151,6 +151,7 @@ export async function lessonView({ args }) {
     const nextBtn = () => (cur < stages.length - 1 ? h('button', { class: 'btn lg', onclick: () => { cur++; draw(); window.scrollTo(0, 0); } }, 'Keyingi bosqich →') : h('button', { class: 'btn lg', onclick: () => { stageEl.replaceChildren(finished()); drawSteps(); } }, 'Yakunlash'));
     const showResult = (res, locked = true) => {
       resultBox.replaceChildren(resultPanel(res));
+      if (res.score != null && res.score >= 0.8) confetti();
       if (locked && comp.lock) comp.lock(res);
       mount(actions, nextBtn(), stage.type !== 'theory' && stage.type !== 'flash' && h('button', { class: 'btn secondary lg', onclick: () => { delete results[stage.key]; draw(); } }, 'Qayta urinish'));
     };

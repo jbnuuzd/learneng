@@ -1,9 +1,20 @@
 import { api } from '../api.js';
 import { h, toast } from '../ui.js';
 import { state, go } from '../state.js';
+import { createMascot } from '../mascot.js';
 
 function brand() {
-  return h('div', { class: 'brand', style: { justifyContent: 'center', fontSize: '1.6rem', paddingBottom: '18px' } }, h('span', { class: 'logo' }, 'L'), 'LearnEng');
+  return h('div', { class: 'brand auth-brand' }, h('span', { class: 'logo' }, 'L'), 'LearnEng');
+}
+
+// Landing layout: Lingo + selling points on a gradient panel, the form beside it.
+function landing(form, title, sub) {
+  const m = createMascot({ size: 210 }); setTimeout(() => m.wave(), 500); m.el.style.cursor = 'pointer'; m.el.onclick = () => { m.wave(); m.cheer(); };
+  return h('div', { class: 'landing' },
+    h('aside', { class: 'landing-hero' }, h('div', { class: 'hero-brand' }, h('span', { class: 'logo' }, 'L'), 'LearnEng'), m.el,
+      h('h1', {}, title), h('p', {}, sub),
+      h('ul', { class: 'perks' }, ['🎯 Shaxsiy traektoriya: CEFR va IELTS maqsadingizga qadar', '🤖 AI baholash va jonli speaking suhbatdoshlar', '📚 Har kuni 50+ yangi so\'z, 15 xil mashq', '🦉 Lingo — o\'zbekcha gapiradigan ingliz tili do\'stingiz'].map((t) => h('li', {}, t)))),
+    h('section', { class: 'landing-form' }, form));
 }
 
 export async function loginView() {
@@ -19,7 +30,7 @@ export async function loginView() {
   h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Parol'), pw),
   h('button', { class: 'btn lg', type: 'submit' }, 'Kirish'),
   h('p', { class: 'muted' }, "Hisobingiz yo'qmi? ", h('a', { href: '#/register' }, "Ro'yxatdan o'tish")));
-  return h('div', {}, brand(), form);
+  return landing(form, "Ingliz tilini o'zbekcha qulaylik bilan o'rganing", 'Diagnostika → shaxsiy reja → har kuni natija. Boshlash uchun tizimga kiring.');
 }
 
 export async function registerView() {
@@ -52,5 +63,5 @@ export async function registerView() {
   inviteField, tField,
   h('button', { class: 'btn lg', type: 'submit' }, "Ro'yxatdan o'tish"),
   h('p', { class: 'muted' }, 'Hisobingiz bormi? ', h('a', { href: '#/login' }, 'Kirish')));
-  return h('div', {}, brand(), form);
+  return landing(form, "LearnEng'ga xush kelibsiz!", "Bir daqiqada hisob oching — keyin ~1 soatlik diagnostika sizning darajangizni aniqlaydi.");
 }

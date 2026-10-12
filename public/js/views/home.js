@@ -12,6 +12,12 @@ export function taskRow(t, { date } = {}) {
     h('div', { style: { textAlign: 'right' } }, h('div', {}, `≈ ${fmtMin(t.minutes)}`), t.status === 'partial' && h('span', { class: 'badge warn' }, `${t.stagesDone} bosqich`), t.status === 'done' && t.score != null && h('span', { class: 'badge ok' }, Math.round(t.score * 100) + '%')));
 }
 
+// circular progress for today's plan (pure SVG)
+function ring(pct) {
+  const r = 34, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, pct));
+  return h('div', { class: 'ring', title: `Bugungi reja: ${Math.round(v)}%`, html: `<svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="8"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - v / 100)}" transform="rotate(-90 42 42)"/></svg><b>${Math.round(v)}%</b>` });
+}
+
 let greeted = false;   // the welcome show plays once each time the site is opened (not on every return to the home page)
 
 function buddyCard(name, st) {
@@ -106,7 +112,8 @@ export async function homeView() {
     h('div', { class: 'hero' }, h('div', { class: 'row between' }, h('div', {}, h('div', { class: 'muted' }, fmtDate(today, true)), h('h1', {}, `Salom, ${me.user.name.split(' ')[0]}! 👋`),
       h('div', {}, daysLeft != null && h('small', {}, `Maqsad: ${goal.target_cefr} · IELTS ${goal.target_ielts} · ${daysLeft} kun qoldi`))),
       h('div', { class: 'row' }, h('small', {}, 'Fikr-mulohaza:'), toneBadge(me.today.tone))),
-      day && h('div', { class: 'progress' }, h('div', { class: 'row between' }, h('small', {}, "Bugungi reja"), h('small', {}, `${fmtMin(day.doneMinutes)} / ${fmtMin(day.totalMinutes)} · ${Math.round(day.percent)}%`)), bar(day.percent / 100))),
+      day && h('div', { class: 'progress' }, h('div', { class: 'row between' }, h('small', {}, "Bugungi reja"), h('small', {}, `${fmtMin(day.doneMinutes)} / ${fmtMin(day.totalMinutes)} · ${Math.round(day.percent)}%`)), bar(day.percent / 100)),
+      day && ring(day.percent)),
     buddyCard(me.user.name.split(' ')[0], st),
     week ? weekCard(week) : null,
     msgs.length ? h('div', { class: 'card flat' }, h('b', {}, `💬 O'qituvchidan xabar${msgs.length > 1 ? 'lar' : ''}`), msgs.map((m) => h('div', { class: 'q' }, h('div', { class: 'fb' }, m.text), h('small', { class: 'muted' }, `${m.teacher} · ${m.created_at.slice(0, 16)}`))),

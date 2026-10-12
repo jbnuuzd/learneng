@@ -26,7 +26,21 @@ export function toast(msg, err = false) {
   document.getElementById('toasts').append(t);
   setTimeout(() => t.remove(), err ? 6500 : 3500);
 }
-export const loading = (text = 'Yuklanmoqda…') => h('div', { class: 'loading' }, h('span', { class: 'spinner' }), ' ', text);
+export const loading = (text = 'Yuklanmoqda…') => h('div', { class: 'loading' }, h('span', { class: 'spinner' }), ' ', text,
+  h('div', { class: 'skel' }, h('i'), h('i'), h('i')));
+
+// Small celebration: coloured paper pieces fall from the top (skipped for reduced-motion users).
+export function confetti(n = 70) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const colors = ['#6d5efc', '#ff7a59', '#12a05c', '#f5a524', '#e11d48', '#2563eb'];
+  const box = h('div', { class: 'confetti', 'aria-hidden': 'true' });
+  for (let i = 0; i < n; i++) {
+    const p = h('i', {}); const s = 6 + Math.random() * 8;
+    Object.assign(p.style, { left: Math.random() * 100 + '%', width: s + 'px', height: s * (0.5 + Math.random()) + 'px', background: colors[i % colors.length], animationDuration: 1.8 + Math.random() * 1.6 + 's', animationDelay: Math.random() * .5 + 's', transform: `rotate(${Math.random() * 360}deg)` });
+    p.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px'); box.append(p);
+  }
+  document.body.append(box); setTimeout(() => box.remove(), 4200);
+}
 
 const MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr'];
 const WEEKDAYS = ['yakshanba', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba'];

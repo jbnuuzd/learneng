@@ -51,8 +51,8 @@ function shell(content) {
   const side = h('aside', { class: 'sidebar', id: 'side' },
     h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'L'), 'LearnEng'),
     h('nav', { class: 'nav' }, nav.map((n) => n[0] === 'sep' ? h('div', { class: 'sep' }, n[1]) :
-      h('a', { href: '#' + n[0], class: (n[0] === '/' || n[0] === '/t' ? (cur === n[0] || (n[0] === '/t' && cur.startsWith('/t/student'))) : cur.startsWith(n[0])) ? 'active' : '', onclick: () => { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); } }, n[1], ' ', n[2]))),
-    h('div', { class: 'me' }, h('b', {}, state.me.user.name), h('div', { class: 'muted' }, state.me.user.role === 'teacher' ? "O'qituvchi" : "O'quvchi"),
+      h('a', { href: '#' + n[0], class: (n[0] === '/' || n[0] === '/t' ? (cur === n[0] || (n[0] === '/t' && cur.startsWith('/t/student'))) : cur.startsWith(n[0])) ? 'active' : '', onclick: () => { $('#side').classList.remove('open'); $('#scrim').classList.remove('show'); } }, h('span', { class: 'ni' }, n[1]), n[2]))),
+    h('div', { class: 'me' }, h('div', { class: 'who' }, h('span', { class: 'avatar' }, state.me.user.name.trim().slice(0, 1).toUpperCase()), h('div', {}, h('b', {}, state.me.user.name), h('div', { class: 'muted' }, state.me.user.role === 'teacher' ? "O'qituvchi" : "O'quvchi"))),
       !state.me.ai && h('div', { class: 'badge warn', style: { marginTop: '8px' }, title: ".env faylida GEMINI_API_KEY ni kiriting" }, "AI ulanmagan"),
       h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn secondary sm theme-btn', title: 'Mavzu', onclick: (e) => { const t = THEMES[(THEMES.findIndex(([k]) => k === getTheme()) + 1) % THEMES.length]; applyTheme(t[0]); e.target.textContent = t[1]; } }, THEMES.find(([k]) => k === getTheme())[1])),
       h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn secondary sm', onclick: logout }, 'Chiqish'))));
@@ -77,7 +77,7 @@ async function render() {
   if (!state.me) { try { await refreshMe(); } catch { state.me = null; } }
   if (!hit) { go('#/'); return; }
   const [m, role, fn] = hit;
-  if (!state.me) { if (role) { go('#/login'); return; } mount(root, h('div', { class: 'auth' }, await fn({ args: m.slice(1), me: null }))); return; }
+  if (!state.me) { if (role) { go('#/login'); return; } mount(root, h('div', { class: 'auth-page' }, await fn({ args: m.slice(1), me: null }))); return; }
   if (!role) { go(state.me.user.role === 'teacher' ? '#/t' : '#/'); return; }
   if (role !== state.me.user.role) { go(state.me.user.role === 'teacher' ? '#/t' : '#/'); return; }
   if (role === S) { // onboarding guard

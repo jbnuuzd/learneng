@@ -73,7 +73,7 @@ export async function speakingTrainerView({ args }) {
   const units = cfg.units;
   let persona = 'emma';
   const grid = h('div', { class: 'grid g4' });
-  const drawP = () => grid.replaceChildren(...cfg.personas.map((p) => h('button', { type: 'button', class: 'persona' + (p.id === persona ? ' on' : ''), onclick: () => { persona = p.id; drawP(); } }, h('div', { class: 'em' }, p.emoji), h('b', {}, p.name), h('small', { class: 'muted' }, p.title), h('small', { class: 'muted' }, p.desc))));
+  const drawP = () => grid.replaceChildren(...cfg.personas.map((p) => h('button', { type: 'button', class: 'persona' + (p.id === persona ? ' on' : ''), onclick: () => { persona = p.id; drawP(); } }, h('div', { class: 'em', style: { '--h': (cfg.personas.indexOf(p) * 36) + 'deg' } }, p.emoji), h('b', {}, p.name), h('small', { class: 'muted' }, p.title), h('small', { class: 'muted' }, p.desc))));
   drawP();
   const level = sel('lv', [['auto', `Avto — traektoriyadagi darajangiz`], ...cfg.levels.map((l) => [l, l])], 'auto');
   const mode = sel('md', cfg.modes.map((m) => [m.id, `${m.title} — ${m.desc}`]), 'free');
