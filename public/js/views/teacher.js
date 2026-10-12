@@ -49,6 +49,7 @@ export async function teacherHomeView() {
     aiBtn.disabled = false;
   } }, '🤖 AI ulanishini tekshirish');
   return h('div', {},
+    d.students.length ? h('div', { class: 'card flat row between' }, h('div', {}, h('b', {}, '📣 Sinfga yuborish'), h('div', { class: 'muted' }, "Bir nechta (yoki barcha) o'quvchiga bir xil topshiriq yoki xabar yuboring.")), h('button', { class: 'btn secondary sm', onclick: () => bulkModal(d.students) }, 'Ochish')) : null,
     h('div', { class: 'card flat row between' }, h('div', {}, h('b', {}, 'Sun\'iy intellekt'), h('div', { class: 'muted' }, "Speaking, baholash va audio ishlamasa, avval shuni bosing: aniq sabab ko'rsatiladi.")), aiBtn), aiBox, keyBox,
     h('div', { class: 'row between' }, h('h1', {}, "O'quvchilar"), h('div', { class: 'row' }, h('a', { class: 'btn secondary sm', href: '/api/teacher/export.csv' }, '⬇ CSV'), h('div', { class: 'card flat', style: { margin: 0, padding: '8px 14px' } }, h('small', { class: 'muted' }, 'Ulanish kodi: '), h('b', { style: { letterSpacing: '.08em' } }, d.inviteCode), ' ', h('button', { class: 'btn ghost sm', onclick: copy }, 'Nusxalash')))),
     d.students.length ? h('div', { class: 'grid g2' }, d.students.map((s) => h('a', { class: 'card', href: '#/t/student/' + s.id, style: { color: 'inherit', textDecoration: 'none' } },
@@ -161,7 +162,7 @@ export async function teacherStudentView({ args }) {
 let catalogCache = null;
 async function catalog() { return (catalogCache ||= await api.get('/api/teacher/catalog')); }
 
-function taskForm(id, refresh) {
+function taskForm(id, refresh, bulk = null) {
   const root = h('div', {});
   (async () => {
     const cat = await catalog();
@@ -181,7 +182,7 @@ function taskForm(id, refresh) {
     root.append(h('div', { class: 'grid g3' }, field('Turi', kind), field('Sana', date), field('Daqiqa', mins)), dyn, field('Izoh', note),
       h('button', { class: 'btn', onclick: async (e) => {
         e.target.disabled = true;
-        try { await api.post(`/api/teacher/students/${id}/tasks`, { kind: kind.value, unit: unit.value, topic: kind.value === 'vocab' ? topic.value : free.value, level: level.value, title: title.value, instructions: instr.value, mode: mode.value, date: date.value, minutes: Number(mins.value) || undefined, note: note.value }); toast('Topshiriq qo\'shildi ✓'); refresh(); }
+        try { await api.post(bulk ? '/api/teacher/tasks/bulk' : `/api/teacher/students/${id}/tasks`, { ...(bulk ? bulk() : {}), kind: kind.value, unit: unit.value, topic: kind.value === 'vocab' ? topic.value : free.value, level: level.value, title: title.value, instructions: instr.value, mode: mode.value, date: date.value, minutes: Number(mins.value) || undefined, note: note.value }); toast(bulk ? 'Topshiriq yuborildi ✓' : 'Topshiriq qo\'shildi ✓'); refresh(); }
         catch (er) { toast(er.message, true); }
         e.target.disabled = false;
       } }, 'Topshiriq berish'));
@@ -264,4 +265,28 @@ export async function teacherWeeklyView() {
         h('td', {}, s.completion == null ? '—' : [h('div', {}, `${s.done}/${s.planned} · ${s.completion}%`), bar(s.completion / 100, s.completion >= 70 ? 'ok' : '')]),
         h('td', {}, `${fmtMin(s.minutes)} `, h('small', { class: 'muted' }, trend(s.minutes, s.prevMinutes))), h('td', {}, `${s.activeDays}/7`), h('td', {}, s.newWords), h('td', {}, s.speaking), h('td', {}, s.avgScore == null ? '—' : s.avgScore + '%'),
         h('td', {}, s.flags.length ? s.flags.map((f) => h('span', { class: 'badge ' + FLAG[f][0], style: { marginRight: '4px' } }, FLAG[f][1])) : h('span', { class: 'muted' }, '—'))))))) : h('div', { class: 'card' }, "Hozircha o'quvchilar yo'q."));
+}
+
+function bulkModal(students) {
+  const checks = students.map((s) => h('input', { type: 'checkbox', checked: true, value: s.id, id: 'bs' + s.id }));
+  const all = h('input', { type: 'checkbox', checked: true, id: 'bs-all', onchange: () => checks.forEach((c) => { c.checked = all.checked; }) });
+  const picked = () => checks.filter((c) => c.checked).map((c) => Number(c.value));
+  const list = h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px 14px', margin: '6px 0 12px' } }, h('label', { for: 'bs-all', style: { fontWeight: 700 } }, all, ' Hammasi'), students.map((s, i) => h('label', { for: 'bs' + s.id, style: { fontWeight: 500 } }, checks[i], ' ' + s.name)));
+  const msg = h('textarea', { placeholder: "Xabar (o'quvchilar bosh sahifada ko'radi)…", style: { minHeight: '80px' }, maxlength: 1000 });
+  const sendMsg = h('button', { class: 'btn', onclick: async (e) => {
+    e.target.disabled = true;
+    try { const r = await api.post('/api/teacher/message/bulk', { studentIds: picked(), text: msg.value }); toast(`${r.students} ta o'quvchiga yuborildi ✓`); msg.value = ''; } catch (er) { toast(er.message, true); }
+    e.target.disabled = false;
+  } }, 'Xabar yuborish');
+  const form = h('div', {});
+  const tabs = { msg: () => h('div', {}, msg, sendMsg), task: () => taskForm(null, () => {}, () => ({ studentIds: picked(), message: msg.value })) };
+  let cur = 'msg'; const body = h('div', {});
+  const pills = h('div', { class: 'pill-btns', style: { marginBottom: '10px' } });
+  const draw = () => {
+    mount(pills, [['msg', '💬 Xabar'], ['task', '📌 Topshiriq']].map(([k, t]) => h('button', { class: 'pill' + (cur === k ? ' on' : ''), type: 'button', onclick: () => { cur = k; draw(); } }, t)));
+    mount(body, cur === 'task' ? [h('p', { class: 'muted' }, "Yuqoridagi xabar maydoni (ixtiyoriy) topshiriq bilan birga yuboriladi."), msg, tabs.task()] : tabs.msg());
+  };
+  draw();
+  form.append(h('b', {}, "Kimga:"), list, pills, body);
+  modal('📣 Sinfga yuborish', form);
 }

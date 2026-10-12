@@ -131,14 +131,44 @@ export function registerTeacher(r) {
   }, T);
   r.delete('/api/teacher/students/:id/tone/:date', async ({ user, params }) => { const s = await myStudent(user, params.id); await q.run('DELETE FROM tone_overrides WHERE student_id=? AND date=?', s.id, params.date); return { ok: true }; }, T);
 
-  r.post('/api/teacher/students/:id/tasks', async ({ user, params, body, date }) => {
-    const s = await myStudent(user, params.id);
+  const giveTask = async (studentId, teacherId, body, date) => {
     const spec = buildTaskSpec(body);
     const d = isDate(body.date) ? body.date : date;
     if (diffDays(date, d) > 365 || diffDays(d, date) > 30) throw bad('Sana oralig\'i noto\'g\'ri');
     const minutes = Math.min(180, Math.max(10, Number(body.minutes) || spec.minutes));
-    const id = await addTask(s.id, user.id, { ...spec, date: d, minutes, note: String(body.note || '').slice(0, 500) });
-    return { id };
+    return addTask(studentId, teacherId, { ...spec, date: d, minutes, note: String(body.note || '').slice(0, 500) });
+  };
+  r.post('/api/teacher/students/:id/tasks', async ({ user, params, body, date }) => {
+    const s = await myStudent(user, params.id);
+    return { id: await giveTask(s.id, user.id, body, date) };
+  }, T);
+
+  // The same task for several students at once (the whole class or a chosen group); optional message to each.
+  const MAX_BULK = 25;   // each task costs a few D1 queries; stay under the Workers subrequest limit
+  const bulkTargets = async (user, ids) => {
+    const list = ids === 'all' ? null : (Array.isArray(ids) ? ids.map(Number).filter(Number.isInteger) : []);
+    if (list && !list.length) throw bad("O'quvchilarni tanlang");
+    const rows = list
+      ? await q.all(`SELECT id FROM users WHERE role='student' AND teacher_id=? AND id IN (SELECT value FROM json_each(?))`, user.id, JSON.stringify(list))
+      : await q.all("SELECT id FROM users WHERE role='student' AND teacher_id=? ORDER BY name", user.id);
+    if (!rows.length) throw bad("O'quvchilar topilmadi");
+    if (rows.length > MAX_BULK) throw bad(`Bir vaqtda ${MAX_BULK} tagacha o'quvchiga yuborish mumkin (${rows.length} ta tanlandi). Guruhlarga bo'lib yuboring.`);
+    return rows.map((x) => x.id);
+  };
+  r.post('/api/teacher/tasks/bulk', async ({ user, body, date }) => {
+    const ids = await bulkTargets(user, body.studentIds);
+    buildTaskSpec(body);   // validate once before writing anything
+    for (const sid of ids) await giveTask(sid, user.id, body, date);
+    const text = String(body.message || '').trim().slice(0, 1000);
+    if (text.length >= 2) await q.run('INSERT INTO messages(teacher_id,student_id,text) SELECT ?, value, ? FROM json_each(?)', user.id, text, JSON.stringify(ids));
+    return { students: ids.length };
+  }, T);
+  r.post('/api/teacher/message/bulk', async ({ user, body }) => {
+    const ids = await bulkTargets(user, body.studentIds);
+    const text = String(body.text || '').trim().slice(0, 1000);
+    if (text.length < 2) throw bad('Xabar bo\'sh');
+    await q.run('INSERT INTO messages(teacher_id,student_id,text) SELECT ?, value, ? FROM json_each(?)', user.id, text, JSON.stringify(ids));
+    return { students: ids.length };
   }, T);
 
   r.delete('/api/teacher/students/:id/tasks/:taskId', async ({ user, params }) => {

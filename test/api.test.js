@@ -240,7 +240,7 @@ test('teacher: overview, extra tasks, remedial, replan, notes, materials, isolat
   assert.equal(r.status, 200); assert.equal(r.headers.get('content-type'), 'application/pdf');
   // another teacher cannot see this student
   const t2 = new Client(srv.base, date);
-  await t2.post('/api/auth/register', { name: 'Boshqa', email: 'other@example.com', password: 'password1', role: 'teacher' });
+  await t2.post('/api/auth/register', { name: 'Boshqa', email: 'boshqa-ustoz@example.com', password: 'password1', role: 'teacher' });
   assert.equal((await t2.get('/api/teacher/students/' + sid)).status, 404);
   assert.equal((await t2.get(`/api/materials/${mid}/download`)).status, 404);
   // other student cannot open someone else's task
@@ -327,4 +327,20 @@ test('teacher weekly report: per-student 7-day numbers, flags, CSV; students are
   const sum = (await teacher.post('/api/teacher/weekly/summary')).data;
   assert.equal(sum.ai, false);
   assert.equal((await student.get('/api/teacher/weekly')).status, 403);
+});
+
+test('bulk: one task / message to several students, only the teacher\'s own', async () => {
+  const other = new Client(srv.base, date);
+  const reg = await other.post('/api/auth/register', { name: 'Ustoz Boshqa', email: 'bulk-teacher@example.com', password: 'password1', role: 'teacher' });
+  assert.equal(reg.status, 200, JSON.stringify(reg.data));
+  const ids = (await teacher.get('/api/teacher/students')).data.students.map((s) => s.id);
+  assert.equal((await other.post('/api/teacher/message/bulk', { studentIds: ids, text: 'salom' })).status, 400, 'cannot reach another teacher\'s students');
+  let r = await teacher.post('/api/teacher/message/bulk', { studentIds: 'all', text: 'Hammaga salom!' });
+  assert.equal(r.status, 200); assert.equal(r.data.students, ids.length);
+  assert.ok((await student.get('/api/messages')).data.some((m) => m.text === 'Hammaga salom!'));
+  r = await teacher.post('/api/teacher/tasks/bulk', { studentIds: ids, kind: 'custom', title: 'Bulk vazifa', instructions: 'Yozing', mode: 'confirm', message: 'Yangi vazifa bor' });
+  assert.equal(r.status, 200); assert.equal(r.data.students, ids.length);
+  const day = (await student.get('/api/plan/day')).data;
+  assert.ok(day.tasks.some((t) => t.title === 'Bulk vazifa'));
+  assert.equal((await teacher.post('/api/teacher/tasks/bulk', { studentIds: [], kind: 'custom', title: 'x', instructions: 'y', mode: 'confirm' })).status, 400);
 });
