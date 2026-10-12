@@ -206,6 +206,8 @@ test('pronunciation trainer: sentences by sound, Gemini scores a recording, ids 
   assert.match(r.data.feedback, /TONE = POSITIV/); assert.equal(r.data.issues[0].word, 'think');
   const call = seen.filter((x) => x.body.contents[0].parts[0].text.includes('reading this sentence aloud')).at(-1);
   assert.ok(call.body.contents[0].parts[0].text.includes(s.text)); assert.equal(call.body.contents[0].parts[1].inlineData.mimeType, 'audio/wav');
+  const st = (await student.get('/api/trainers/pronunciation/stats')).data;
+  assert.equal(st.total, 1); assert.equal(st.recentAvg, 62); assert.equal(st.groups[0].focus, 'th'); assert.equal(st.trend, null);
   assert.equal((await student.post('/api/trainers/pronunciation/check', { id: 9999, wav: 'AAAA' })).status, 400);
   assert.equal((await student.post('/api/trainers/pronunciation/check', { id: s.id })).status, 400);
 });

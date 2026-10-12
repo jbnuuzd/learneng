@@ -52,6 +52,17 @@ export function registerTrainers(r) {
     return { level, levels: LEVELS, focuses: PRON_FOCUS, focus, ai: aiEnabled(), sentences };
   }, { role: 'student' });
 
+  // Progress for the pronunciation trainer: recent average, best/worst sound groups, last results
+  r.get('/api/trainers/pronunciation/stats', async ({ user }) => {
+    const rows = await q.all('SELECT focus, score, created_at FROM pron_results WHERE user_id=? ORDER BY id DESC LIMIT 100', user.id);
+    if (!rows.length) return { total: 0 };
+    const avg = (a) => Math.round(a.reduce((x, y) => x + y, 0) / a.length);
+    const by = new Map(); for (const r of rows) { if (!by.has(r.focus)) by.set(r.focus, []); by.get(r.focus).push(r.score); }
+    const groups = [...by].map(([f, s]) => ({ focus: f, title: PRON_FOCUS.find((x) => x.id === f)?.title || f, n: s.length, avg: avg(s) })).sort((a, b) => a.avg - b.avg);
+    const last10 = rows.slice(0, 10).map((r) => r.score), prev10 = rows.slice(10, 20).map((r) => r.score);
+    return { total: rows.length, recentAvg: avg(last10), trend: prev10.length ? avg(last10) - avg(prev10) : null, best: Math.max(...rows.map((r) => r.score)), groups, weakest: groups.filter((g) => g.n >= 2).slice(0, 2), series: rows.slice(0, 20).reverse().map((r) => ({ date: r.created_at.slice(0, 10), score: r.score })) };
+  }, { role: 'student' });
+
   r.post('/api/trainers/pronunciation/check', async ({ user, body, date }) => {
     const s = PRON_SENTENCES[Number(body.id)];
     if (!s) throw bad('Gap topilmadi');
@@ -61,7 +72,11 @@ export function registerTrainers(r) {
     rateLimit(user.id, 'ai', 40);
     const tone = await effectiveTone(user.id, date);
     const focus = PRON_FOCUS.find((f) => f.id === s.f)?.title;
-    try { return await gradePronunciation({ sentence: s.t, wav, tone, level: await achievedCefr(user.id), focus }); }
+    try {
+      const res = await gradePronunciation({ sentence: s.t, wav, tone, level: await achievedCefr(user.id), focus });
+      if (res.ai) await q.run('INSERT INTO pron_results(user_id,sentence_id,focus,score) VALUES(?,?,?,?)', user.id, Number(body.id), s.f, Math.round(res.score));
+      return res;
+    }
     catch (e) { throw new HttpError(502, `AI hozir javob bera olmadi: ${aiErrorText(e)}`); }
   }, { role: 'student', limit: 6 * 1024 * 1024 });
 

@@ -33,6 +33,7 @@ export function analysisView(a) {
 
 export async function progressView() {
   const p = await api.get('/api/progress');
+  const pron = await api.get('/api/trainers/pronunciation/stats').catch(() => ({ total: 0 }));
   const anaBox = h('div', {});
   const btn = h('button', { class: 'btn lg', onclick: async () => {
     btn.disabled = true; mount(anaBox, loading('AI tahlil qilmoqda…'));
@@ -43,6 +44,10 @@ export async function progressView() {
   return h('div', {},
     h('h1', {}, 'Progress va tahlil'),
     h('div', { class: 'grid g4' }, levelCard('Umumiy daraja', p.overall), h('div', { class: 'card flat stat' }, h('b', {}, st.tasksDone), h('span', {}, 'bajarilgan topshiriq')), h('div', { class: 'card flat stat' }, h('b', {}, fmtMin(st.minutesDone)), h('span', {}, 'jami o\'qilgan')), h('div', { class: 'card flat stat' }, h('b', {}, st.completionRate != null ? st.completionRate + '%' : '—'), h('span', {}, 'reja bajarilishi'))),
+    pron.total ? h('div', { class: 'card' }, h('div', { class: 'row between' }, h('h2', {}, '🗣 Talaffuz'), h('a', { class: 'btn secondary sm', href: '#/trainer/pronunciation' }, 'Mashq qilish')),
+      h('div', { class: 'grid g4' }, [[pron.recentAvg + '%', "oxirgi 10 ta o'rtacha"], [pron.best + '%', 'eng yaxshi'], [pron.total, 'tekshirilgan gap'], [pron.trend == null ? '—' : (pron.trend >= 0 ? '▲ +' : '▼ ') + pron.trend, "o'zgarish (oldingi 10 taga nisbatan)"]].map(([b, s]) => h('div', { class: 'card flat stat' }, h('b', {}, b), h('span', {}, s)))),
+      h('div', {}, pron.groups.map((g) => h('div', { class: 'row between q' }, h('span', {}, g.title), h('div', { style: { width: '50%' } }, bar(g.avg / 100, g.avg >= 75 ? 'ok' : '')), h('b', {}, g.avg + '%')))),
+      pron.weakest?.length ? h('div', { class: 'alert warn' }, '💡 Eng ko\'proq mashq kerak: ' + pron.weakest.map((g) => g.title).join(', ')) : null) : null,
     p.badges?.length ? h('div', { class: 'card' }, h('h2', {}, '🏅 Yutuqlar'), h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '8px' } }, p.badges.map((b) => h('span', { class: 'badge ' + (b.earned ? 'ok' : ''), title: b.earned ? 'Qo\'lga kiritilgan' : `Keyingi maqsad: ${b.progress}%`, style: b.earned ? {} : { opacity: .55 } }, (b.earned ? '' : '🔒 ') + b.title + (b.earned ? '' : ` (${b.progress}%)`))))) : null,
     p.srs && p.srs.total ? h('div', { class: 'card' }, h('h2', {}, "🔁 So'z xotirasi"),
       h('div', { class: 'grid g4' }, [[p.srs.total, "o'rganilgan so'z"], [p.srs.due, 'bugun takrorlash kerak'], [p.srs.mastered, "mustahkam (14+ kun)"], [p.srs.accuracy != null ? p.srs.accuracy + '%' : '—', 'takrorlash aniqligi']].map(([v, t]) => h('div', { class: 'card flat stat' }, h('b', {}, v), h('span', {}, t)))),

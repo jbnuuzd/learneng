@@ -80,6 +80,8 @@ BBC transkriptini joylash) → 10 xil ustoz bilan speaking (oxirida xato, yutuq,
 
 **Yangi:** 🔁 intervalli so'z takrorlash (SRS: 1→3→7→14→30→60 kun, bugungi takrorlash vazifasi avtomatik), 📝 vaqtli **IELTS mock test** (mini ≈ 88 daq., to'liq ≈ 164 daq.; band hisobi, maqsad bilan farq va tavsiyalar), 26 ta grammatika darsi.
 
+**🗣 Talaffuz progressi:** har tekshirilgan gap saqlanadi; «Progress» sahifasida o'rtacha ball, tendensiya, tovush guruhlari bo'yicha natija va eng zaif tovushlar.
+
 **📊 Haftalik hisobot (o'qituvchi):** oxirgi 7 kun bo'yicha har o'quvchi — bajarilish, daqiqa (oldingi hafta bilan), faol kunlar, yangi so'zlar, speaking, o'rtacha ball; «Faol emas / Orqada / Pasaymoqda / O'smoqda» belgilari, «🤖 AI xulosa» va CSV.
 
 **Lingo bilan ovozli suhbat:** 🎤 tugmasini bosib gapiring, ■ ni bosganda yuboriladi (30 soniyagacha). Gemini gapingizni yozib oladi (inglizcha yoki o'zbekcha), Lingo javob beradi, xatoingizni tuzatadi va ovozda aytadi.
